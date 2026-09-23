@@ -29,6 +29,29 @@ def perturb_after(df: pd.DataFrame | pd.Series, t: pd.Timestamp, seed: int = 0):
     return out
 
 
+def assert_uses_only_past(func: Callable, data, t: pd.Timestamp, seed: int = 0) -> None:
+    """Assert that ``func(data, t)`` is unchanged when data after t changes.
+
+    For estimators whose output is not indexed by date (e.g. Σ or μ at date t).
+
+    Parameters
+    ----------
+    func : maps (data, t) to a DataFrame, Series or array.
+    data : DataFrame or Series indexed by date.
+    t : estimation date.
+    seed : random seed passed to ``perturb_after``.
+
+    Raises
+    ------
+    AssertionError if the output changes, or if ``data`` has no rows after t (the
+    check would be vacuous).
+    """
+    assert (data.index > t).any(), "no data after t: test is vacuous"
+    base = func(data, t)
+    moved = func(perturb_after(data, t, seed), t)
+    np.testing.assert_array_equal(np.asarray(base), np.asarray(moved))
+
+
 def assert_point_in_time(func: Callable, data, t: pd.Timestamp, seed: int = 0) -> None:
     """Assert that every output row dated <= t is unchanged when data after t changes.
 

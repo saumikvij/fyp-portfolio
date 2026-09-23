@@ -18,7 +18,7 @@ All parameters are in [config.yaml](config.yaml). Run every command from the rep
 | Phase | Status | Run |
 |---|---|---|
 | 0. Setup & data | done | `python -m src.data` |
-| 1. Optimization core | not started | — |
+| 1. Optimization core | done | `python -m notebooks.phase1_frontier` |
 | 2. Backtest engine & baselines | not started | — |
 | 3. ML forecasting | not started | — |
 | 4. Black–Litterman integration | not started | — |
@@ -49,6 +49,32 @@ Outputs in `data/processed/` (git-ignored, re-created by the command above):
 
 Load them in code with `src.data.load_processed(load_config())`.
 
+### Phase 1 — optimization core
+
+```bash
+pytest tests/test_estimators.py tests/test_optimization.py   # theorem checks T1–T4, Cor. 2.1
+python -m notebooks.phase1_frontier                          # figures (needs Phase 0 data)
+```
+
+- [src/estimators.py](src/estimators.py): trailing-window sample covariance (scaled to monthly) and historical mean, both point-in-time.
+- [src/optimization.py](src/optimization.py): closed forms (frontier constants A, B, C, D; GMV; frontier weights and variance; two-fund vectors; tangency; unconstrained mean-variance) and the constrained problem with cvxpy (long-only, weight cap, sector bounds), plus `kkt_residuals` for T4.
+
+| Test | Result checked |
+|---|---|
+| `test_T1_*` | strong-concavity gap U(w*) − U(w) ≥ (γ/2)(w−w*)ᵀΣ(w−w*) ⇒ unique optimum |
+| `test_T2_*` | closed-form frontier = solver; σ²(m) is the parabola (Am² − 2Bm + C)/D; GMV at the vertex |
+| `test_cor21_*` | a frontier portfolio is the predicted affine combination of two others |
+| `test_T3_*` | tangency formula = numerical Sharpe maximization; it lies on the frontier |
+| `test_T4_*` | KKT conditions hold at the solver solution; multipliers match the marginal-utility interpretation |
+
+Outputs in `report/figures/`:
+
+| File | Contents |
+|---|---|
+| `frontier.png` | σ–μ plane at `frontier_plot.as_of`: both frontiers, GMV, tangency and capital market line, the three risk-tolerance portfolios, stocks |
+| `frontier_parabola.png` | T2 parabola in (σ², μ) space with solver points on it |
+| `phase1_portfolios.csv` | ex-ante return, volatility, Sharpe and holdings of the plotted portfolios |
+
 ## Tests
 
 ```bash
@@ -56,4 +82,4 @@ pytest            # all tests
 pytest -m data    # only tests that read data/processed (skipped if not built)
 ```
 
-`tests/pit.py` holds the shared look-ahead check (`assert_point_in_time`): outputs dated ≤ t must not change when data after t is scrambled (plan Section 6).
+`tests/pit.py` holds the shared look-ahead checks (plan Section 6): `assert_point_in_time` (outputs dated ≤ t must not change when data after t is scrambled) and `assert_uses_only_past` (an estimate made at t, such as Σ or μ, must not change).

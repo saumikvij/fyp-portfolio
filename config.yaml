@@ -20,6 +20,22 @@ backtest:
   cost_bps_grid: [0, 10, 25]
   w_max: 0.10                  # per-stock weight cap (Section 6.6)
 
+estimators:
+  mean_window_months: null     # historical mean μ: null = expanding window
+
+optimization:
+  solver: CLARABEL             # cvxpy interior-point QP solver
+  sector_bounds: {}            # default: none. e.g. {Energy: [0.0, 0.0]} excludes energy
+  kkt_tol: 1.0e-6              # tolerance when checking KKT conditions (T4)
+  weight_tol: 1.0e-5           # a weight this close to a bound counts as at the bound
+
+frontier_plot:                 # Phase 1 figures
+  as_of: "2026-08-31"          # estimation date for μ and Σ
+  n_points: 60
+  figure_dir: report/figures
+  x_max_vol_pa: 40               # x-axis limit of frontier.png (% per year)
+  y_headroom_pa: 6               # space above the highest frontier point (% per year)
+
 risk_tolerance:                # γ for each level (Section 2.6)
   low: 10
   medium: 5

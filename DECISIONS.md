@@ -49,7 +49,7 @@ Every choice not fixed by [FYP_PLAN.md](FYP_PLAN.md) is recorded here: what was 
 - **Caveat:** for SPG and PLD the implied count includes operating-partnership units that convert into shares. This matches how Yahoo computes market cap.
 
 ### D0.10 Environment: Python 3.14 venv, pinned versions
-- Versions pinned in `requirements.txt`. LightGBM needs the OpenMP runtime on macOS (`brew install libomp`); deferred to Phase 3, where it is first used.
+- Versions pinned in `requirements.txt`. LightGBM needs the OpenMP runtime on macOS (`brew install libomp`); installed 23 Sep 2026 and LightGBM 4.7.0 verified to train.
 
 ### D0.11 Plan parameters entered in `config.yaml` now
 - γ levels (10/5/2), τ = 0.05 and its grid, δ = 2.5, cost levels (0/10/25 bps), w_max = 10%, out-of-sample start 2016-01, 252-day covariance window, α = 0.95 are copied from the plan. The τ grid values (0.01–0.25) are my choice; the plan only says "a grid".
@@ -65,3 +65,37 @@ A full audit of `data/raw` and `data/processed` beyond the unit tests. Result: *
 - **Large moves:** 73 daily moves above 15%. Most fall on market-wide event days (COVID crash and rebound March 2020, vaccine news 9 Nov 2020); the rest are single-stock moves on known news dates (e.g. NVDA earnings, UNH 2025). A bad price usually shows as a spike that reverses the next day: all 26 such cases are 9–23 Mar 2020, when SPY itself moved about ±9% a day, and there are none outside that window. None removed.
 - **Volume:** split-adjusted (no step change at the AAPL, NVDA, AMZN, GOOGL, WMT splits), no zero-volume days.
 - **Sanity:** SPY 14.2% per year over the sample; the equal-weight stock return has 0.95 correlation with SPY; ^IRX between −0.1% and 5.35%, with year-end levels matching the known rate history (near zero 2010–2015 and 2020–21, about 5% in 2023). The 7 slightly negative days are all 19–27 Mar 2020, when T-bill yields briefly dipped below zero.
+
+## Phase 1 — Optimization core (23 Sep 2026)
+
+### D1.1 Covariance: trailing 252 days, scaled to monthly by × 21
+- Σ_monthly = (252/12) × Σ_daily, which assumes daily returns are uncorrelated over time. Using daily data keeps the estimate recent; monthly returns over 252 days would give only 12 observations for a 51 × 51 matrix, which would be singular.
+- Checked on the real data: Σ is positive definite at every yearly check date (the standing assumption of T1–T5).
+
+### D1.2 Historical mean: expanding window of raw (not excess) monthly returns
+- **Why raw is fine:** with the budget constraint 1ᵀw = 1, adding a constant c to every μᵢ adds c to the objective and doesn't change the optimal w, even with bounds. So subtracting r_f doesn't matter for mean-variance. Only the tangency portfolio needs μ − r_f 1, and it takes r_f explicitly.
+- Window length is in the config (`estimators.mean_window_months`, null = expanding).
+
+### D1.3 Solver: CLARABEL (interior point) rather than OSQP
+- T4 needs accurate Lagrange multipliers. CLARABEL returns duals accurate to about 1e-9; OSQP (first-order ADMM) is faster but less accurate. At n = 51 speed doesn't matter.
+
+### D1.4 KKT sign convention and multiplier meaning
+- Stationarity is written as ∇f + ν1 − λ + η + Sᵀ(ρ_up − ρ_low) = 0 for f = (γ/2)wᵀΣw − μᵀw, matching cvxpy's duals (verified numerically).
+- Equivalently μᵢ − γ(Σw)ᵢ = ν − λᵢ + ηᵢ: every asset held strictly inside its bounds has the same marginal utility ν; a zero-weight asset has marginal utility ν − λᵢ ≤ ν; an asset at the cap has ν + ηᵢ ≥ ν. Tested in `test_T4_multiplier_interpretation`. Use the same convention in the written T4 proof.
+
+### D1.5 Weight tolerance 1e-5 for "at the bound"
+- Interior-point solvers stop a small distance inside active bounds (e.g. 4e-7 instead of 0, 0.1999993 instead of 0.2). `optimization.weight_tol` = 1e-5 decides when a weight counts as zero or capped (tests, holdings counts). Solver weights are not rounded, so the KKT checks stay exact.
+
+### D1.6 How T1 is tested
+- Instead of comparing two solvers, the test checks the inequality behind the uniqueness proof: at the optimum w*, U(w*) − U(w) ≥ (γ/2)(w − w*)ᵀΣ(w − w*) for 200 random feasible w. With Σ ≻ 0 the right side is > 0 for w ≠ w*, so no other feasible point ties.
+
+### D1.7 Sector constraints as {sector: (lower, upper)}
+- One format covers the plan's "optional sector constraints" and the user's sector preferences (Phase 5): excluding a sector is (0, 0), capping one is (0, u). Default: none (`optimization.sector_bounds: {}`). Unknown sector names raise an error rather than being ignored.
+
+### D1.8 Figures come from a script, not a Jupyter notebook
+- `notebooks/phase1_frontier.py` runs with one command and always rebuilds the figures from the config. Jupyter isn't installed, and a script is easier to re-run after data changes.
+- Axes are annualized (mean × 12, volatility × √12). Stocks with volatility above 40% per year or returns above the plot range are left out of the zoomed view and counted in a note (3 stocks).
+- r_f for the tangency portfolio is the T-bill yield observed at the estimation date (3.67% per year on 2026-08-31).
+
+### D1.9 Finding to discuss in the report: in-sample optimism of historical means
+- At 2026-08-31 the ex-ante Sharpe ratios are about 1.6–2.5 per year (`phase1_portfolios.csv`), far above what stocks deliver out of sample (SPY: about 0.74 over 2010–2026, from 14.2% return, 17.1% volatility, 1.5% average r_f). This is estimation error in μ (plus survivorship bias, D0.2) being "optimized" into the portfolio. It is the motivation for T5 (sensitivity) and for Black–Litterman, and the Phase 2 backtest will measure it out of sample.
