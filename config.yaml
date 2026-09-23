@@ -1,0 +1,102 @@
+# FYP configuration: every tunable parameter lives here (FYP_PLAN.md Section 0).
+
+data:
+  start: "2010-01-01"
+  end: "2026-08-31"            # last complete month (plan Section 3); inclusive
+  raw_dir: data/raw
+  processed_dir: data/processed
+  benchmark: SPY
+  risk_free: "^IRX"            # 13-week T-bill yield, annualized percent
+  trading_days_per_year: 252
+  # Cleaning rules
+  max_ffill_days: 5            # longest gap (trading days) filled with the last known price
+  max_missing_frac: 0.01       # a ticker with more missing days than this is rejected
+  extreme_daily_return: 0.40   # |daily return| above this is logged for manual review
+
+backtest:
+  oos_start: "2016-01-01"      # first out-of-sample month; earlier data only for training
+  cov_window_days: 252         # trailing window for the covariance (Section 6.4)
+  cost_bps: 10                 # per unit turnover (Section 6.5)
+  cost_bps_grid: [0, 10, 25]
+  w_max: 0.10                  # per-stock weight cap (Section 6.6)
+
+risk_tolerance:                # γ for each level (Section 2.6)
+  low: 10
+  medium: 5
+  high: 2
+
+black_litterman:
+  delta: 2.5                   # market risk aversion
+  tau: 0.05
+  tau_grid: [0.01, 0.025, 0.05, 0.1, 0.25]
+
+tail_risk:
+  alpha: 0.95
+
+seed: 42
+
+# Fixed universe: ~50 S&P 500 large caps, 4-6 per GICS sector, all listed before 2010
+# so the full sample is available. Sectors are GICS (fixed here, not taken from Yahoo).
+universe:
+  # Information Technology
+  AAPL: Information Technology
+  MSFT: Information Technology
+  NVDA: Information Technology
+  ORCL: Information Technology
+  CSCO: Information Technology
+  ADBE: Information Technology
+  # Communication Services
+  GOOGL: Communication Services
+  CMCSA: Communication Services
+  VZ: Communication Services
+  DIS: Communication Services
+  # Consumer Discretionary
+  AMZN: Consumer Discretionary
+  HD: Consumer Discretionary
+  MCD: Consumer Discretionary
+  NKE: Consumer Discretionary
+  LOW: Consumer Discretionary
+  # Consumer Staples
+  PG: Consumer Staples
+  KO: Consumer Staples
+  PEP: Consumer Staples
+  WMT: Consumer Staples
+  COST: Consumer Staples
+  # Health Care
+  JNJ: Health Care
+  UNH: Health Care
+  PFE: Health Care
+  MRK: Health Care
+  ABT: Health Care
+  # Financials
+  JPM: Financials
+  BAC: Financials
+  WFC: Financials
+  GS: Financials
+  AXP: Financials
+  # Industrials
+  CAT: Industrials
+  HON: Industrials
+  UNP: Industrials
+  LMT: Industrials
+  UPS: Industrials
+  # Energy
+  XOM: Energy
+  CVX: Energy
+  COP: Energy
+  SLB: Energy
+  # Utilities
+  NEE: Utilities
+  DUK: Utilities
+  SO: Utilities
+  D: Utilities
+  # Real Estate
+  AMT: Real Estate
+  PLD: Real Estate
+  SPG: Real Estate
+  PSA: Real Estate
+  # Materials
+  SHW: Materials
+  APD: Materials
+  ECL: Materials
+  NEM: Materials
