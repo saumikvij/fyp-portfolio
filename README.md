@@ -1,6 +1,6 @@
 # Risk-Aware Portfolio Recommendation (FYP)
 
-Mean-variance portfolio optimization with ML-informed Black–Litterman views, evaluated with a walk-forward backtest. See [FYP_PLAN.md](FYP_PLAN.md) for the full plan and [DECISIONS.md](DECISIONS.md) for the decision log.
+Mean-variance portfolio optimization with ML-informed Black–Litterman views, evaluated with a walk-forward backtest. The project plan is kept privately; see [DECISIONS.md](DECISIONS.md) for the decision log.
 
 ## Setup
 

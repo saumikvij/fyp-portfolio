@@ -11,3 +11,6 @@ __pycache__/
 # OS / editor
 .DS_Store
 .vscode/
+
+# Private project plan (kept locally)
+FYP_PLAN.md

@@ -1,6 +1,6 @@
 # Decision log
 
-Every choice not fixed by [FYP_PLAN.md](FYP_PLAN.md) is recorded here: what was chosen, what else was considered, and why. Newest entries go at the bottom of each phase.
+Every choice not fixed by the project plan is recorded here: what was chosen, what else was considered, and why. Newest entries go at the bottom of each phase.
 
 ## Phase 0 — Setup & data (23 Sep 2026)
 
