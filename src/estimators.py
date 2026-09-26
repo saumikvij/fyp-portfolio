@@ -6,6 +6,7 @@ Units: monthly, because the portfolio is rebalanced and held monthly.
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 
@@ -65,3 +66,26 @@ def historical_mean(returns_monthly: pd.DataFrame, t: pd.Timestamp,
     if hist.empty:
         raise ValueError(f"No monthly returns on or before {t.date()}")
     return hist.mean()
+
+
+def condition_number(Sigma: pd.DataFrame) -> float:
+    """Spectral condition number κ(Σ) = λ_max / λ_min of a symmetric PD matrix.
+
+    Parameters
+    ----------
+    Sigma : covariance (n x n), symmetric positive definite.
+
+    Returns
+    -------
+    κ(Σ) ≥ 1; large values mean Σ⁻¹ amplifies errors in μ (T5).
+
+    Raises
+    ------
+    ValueError if Σ is not positive definite.
+
+    Theorem: T5 (the sensitivity bound grows with κ(Σ)).
+    """
+    eig = np.linalg.eigvalsh(Sigma.values)
+    if eig[0] <= 0:
+        raise ValueError(f"Σ is not positive definite (λ_min = {eig[0]:.3g})")
+    return float(eig[-1] / eig[0])

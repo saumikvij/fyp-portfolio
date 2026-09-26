@@ -19,7 +19,7 @@ All parameters are in [config.yaml](config.yaml). Run every command from the rep
 |---|---|---|
 | 0. Setup & data | done | `python -m src.data` |
 | 1. Optimization core | done | `python -m notebooks.phase1_frontier` |
-| 2. Backtest engine & baselines | not started | — |
+| 2. Backtest engine & baselines | done | `python -m notebooks.phase2_backtest` |
 | 3. ML forecasting | not started | — |
 | 4. Black–Litterman integration | not started | — |
 | 5. Demo & final report | not started | — |
@@ -74,6 +74,36 @@ Outputs in `report/figures/`:
 | `frontier.png` | σ–μ plane at `frontier_plot.as_of`: both frontiers, GMV, tangency and capital market line, the three risk-tolerance portfolios, stocks |
 | `frontier_parabola.png` | T2 parabola in (σ², μ) space with solver points on it |
 | `phase1_portfolios.csv` | ex-ante return, volatility, Sharpe and holdings of the plotted portfolios |
+
+### Phase 2 — backtest engine and baselines
+
+```bash
+pytest tests/test_metrics.py tests/test_backtest.py   # metrics, T7 checks, engine, look-ahead
+python -m notebooks.phase2_backtest                    # S1–S4 results (about 5 seconds)
+```
+
+- [src/backtest.py](src/backtest.py): monthly walk-forward engine. At each month-end t the strategy receives only data sliced to `.loc[:t]`, returns target weights, and the portfolio is held over the next month. Tracks drift, turnover and costs (`net(cost_bps)`), and daily returns for the daily tail-risk check. Strategies S1 (1/N), S2 (SPY), S3 (minimum variance) and S4 (Markowitz with historical μ, one per γ level).
+- [src/metrics.py](src/metrics.py): annualized return and volatility, Sharpe with the Lo (2002) confidence interval, maximum drawdown, historical VaR and CVaR, turnover, weight stability.
+- `condition_number` in [src/estimators.py](src/estimators.py): κ(Σ) for the empirical side of T5.
+
+| Test | Result checked |
+|---|---|
+| `test_T7_var_not_subadditive_counterexample` | two independent loans (4% default each): VaR₉₅(A) = VaR₉₅(B) = 0 but VaR₉₅(A+B) = 100 |
+| `test_T7_cvar_subadditive_*`, `test_T7_cvar_other_coherence_axioms` | CVaR is subadditive, translation invariant, positively homogeneous and monotone on random heavy-tailed samples |
+| `test_cvar_tail_average_equals_rockafellar_uryasev` | tail average = min_ζ {ζ + E[(L−ζ)⁺]/(1−α)}, including non-integer tail sizes |
+| `test_sharpe_ci_coverage_iid_normal` | the Lo (2002) interval covers the true Sharpe ~95% of the time |
+| `test_backtest_results_unchanged_by_future_data`, `test_strategy_never_sees_future_data` | no look-ahead in the engine or strategies |
+
+Outputs:
+
+| File | Contents |
+|---|---|
+| `report/tables/phase2_metrics.csv` | all metrics for every strategy at 0 / 10 / 25 bps |
+| `report/tables/phase2_tail_ranking.csv` | strategies ranked by volatility vs by CVaR |
+| `report/tables/phase2_condition.csv` | κ(Σ), λ_min, λ_max at each rebalance |
+| `report/tables/phase2_returns.csv` | monthly net returns (10 bps) |
+| `report/figures/backtest_wealth.png` | growth of $1 for S1, S2, S3 and S4 (γ = 5) |
+| `report/figures/condition_number.png` | κ(Σ) over time |
 
 ## Tests
 

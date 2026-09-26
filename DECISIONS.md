@@ -99,3 +99,52 @@ A full audit of `data/raw` and `data/processed` beyond the unit tests. Result: *
 
 ### D1.9 Finding to discuss in the report: in-sample optimism of historical means
 - At 2026-08-31 the ex-ante Sharpe ratios are about 1.6–2.5 per year (`phase1_portfolios.csv`), far above what stocks deliver out of sample (SPY: about 0.74 over 2010–2026, from 14.2% return, 17.1% volatility, 1.5% average r_f). This is estimation error in μ (plus survivorship bias, D0.2) being "optimized" into the portfolio. It is the motivation for T5 (sensitivity) and for Black–Litterman, and the Phase 2 backtest will measure it out of sample.
+
+## Advisor meeting (23 Sep 2026)
+
+### A1 Phases 0–1 approved as they stand
+- Presented: the data pipeline and audit, the optimization core, the T1–T4 checks and the frontier figures (progress page).
+- Four points were raised for confirmation: universe of stocks listed before 2010 (D0.2), covariance from daily returns scaled × 21 (D1.1), current share counts for BL market caps (D0.9), and proving T5 for the unconstrained / equality-constrained case.
+- **Outcome:** the advisor said all of it is fine as it is. No changes; the decisions above stand.
+
+## Phase 2 — Backtest engine & baselines (26 Sep 2026)
+
+### D2.1 Look-ahead is prevented by construction
+- The engine slices every table to `.loc[:t]` into a `History` object before calling a strategy, so a strategy cannot read future data even by mistake. Phase 3 models and the Phase 4 BL strategy will use the same interface.
+- Two tests back this up: a strategy asserts it never sees a date after t, and scrambling all data after t leaves every weight and return dated ≤ t unchanged.
+
+### D2.2 Timing: 128 out-of-sample months, Jan 2016 – Aug 2026
+- The first portfolio is chosen at 31 Dec 2015 using only data to that date and held over January 2016; the last is chosen at 31 Jul 2026 and held over August 2026.
+
+### D2.3 Turnover measured against drifted weights; the first trade counts
+- Turnover at t = Σ|w_target − w_drifted|, where drifted weights are last month's after a month of price moves. So even 1/N trades a little each month (4.6% on average).
+- Building the portfolio from cash is turnover 1 and is charged costs, the same for every strategy. The *average* turnover reported leaves this first month out, so SPY buy-and-hold shows 0.
+
+### D2.4 Costs: multiplicative, charged at the start of the month
+- Net return = (1 − c·turnover)(1 + gross) − 1 with c = bps / 10 000 (grid 0 / 10 / 25). For the daily series the cost is charged on the month's first trading day, so daily net returns compound exactly to the monthly net return (tested).
+- Weights don't depend on costs, so each strategy runs once and costs are applied afterwards.
+
+### D2.5 Solver dust removed from backtest weights
+- Weights below `weight_tol` (1e-5) are set to 0 and the rest rescaled to sum to 1, so solver noise of ~1e-9 doesn't show up as turnover.
+
+### D2.6 VaR and CVaR estimators
+- VaR_α is the lower empirical quantile of the loss (smallest ℓ with F̂(ℓ) ≥ α). CVaR is computed with the Rockafellar–Uryasev formula at ζ = VaR_α; the tests confirm it equals both the direct tail average and the RU minimum over ζ.
+- **Caveat for the report:** 128 monthly returns give a 5% tail of only about 6.4 observations, so monthly VaR / CVaR are noisy. As the plan suggests, daily VaR / CVaR (about 2,680 days) are reported as a check, and they give the same ranking.
+
+### D2.7 Sharpe confidence interval: Lo (2002), i.i.d. version
+- SE = √((1 + SR²/2)/T) per month, annualized by √12, z = 1.96. The formula is cited (proof is optional item O1). A Monte Carlo test confirms about 95% coverage for i.i.d. normal returns. Lo's autocorrelation-adjusted version isn't used.
+
+### D2.8 T7 counterexample used in the tests
+- Two independent loans, each losing 100 with probability 4% (else 0). Alone, P(loss > 0) = 4% < 5%, so VaR₉₅ = 0; together, P(any default) = 1 − 0.96² = 7.84% > 5%, so VaR₉₅(A+B) = 100 > 0 + 0. The same numbers can be used in the written proof of T7.
+
+### D2.9 Strategy set
+- S3 and S4 use the same constraints as the plan's main problem: long-only, 10% cap, no sector bounds (config default). S4 is run for all three γ levels; γ = 5 (medium) is the headline S4 in figures.
+- Weight stability = mean Σ|w_t − w_{t−1}| between consecutive *target* portfolios, which separates the optimizer changing its mind (T5) from price drift.
+
+### D2.10 Findings from the baseline backtest (10 bps)
+- **Markowitz doesn't beat 1/N out of sample**, in line with DeMiguel et al. (2009): Sharpe 0.96 for S1 against 0.85–0.95 for S4. All Sharpe intervals overlap (about ±0.6), so no difference is statistically significant over 128 months.
+- **S4 has the worst drawdowns** (26–30% against 19% for 1/N and 24% for SPY) and the least stable weights: 13–20% of the portfolio changes each month, against 0 for 1/N. This is the empirical side of T5.
+- **Minimum variance (S3) does what it promises:** lowest volatility (11.9%), CVaR (6.4% monthly) and drawdown (16%), but also the lowest return (12.0%) and the highest turnover (25%).
+- **Variance and CVaR disagree once:** SPY has lower volatility than S4 (γ = 5) (15.1% vs 15.3%) but a worse CVaR (monthly 9.1% vs 8.7%; daily 2.71% vs 2.57%). The gap is small but consistent at both frequencies. This is the tail-risk discussion the plan asks for.
+- **κ(Σ)** ranges from 129 to 1,540 (median 371), with the maximum in April 2020, when the COVID crash made one market-wide eigenvalue dominate. Errors in μ can therefore be amplified by factors in the hundreds (T5).
+- Costs matter most for the high-turnover strategies: going from 0 to 25 bps lowers S3's Sharpe from 0.86 to 0.79 but barely moves 1/N or SPY.

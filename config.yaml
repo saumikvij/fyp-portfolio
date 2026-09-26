@@ -36,6 +36,12 @@ frontier_plot:                 # Phase 1 figures
   x_max_vol_pa: 40               # x-axis limit of frontier.png (% per year)
   y_headroom_pa: 6               # space above the highest frontier point (% per year)
 
+phase2:                        # baseline backtest outputs (S1-S4)
+  main_gamma: medium           # risk level used for the headline S4 (all levels are run)
+  sharpe_ci_level: 0.95
+  figure_dir: report/figures
+  table_dir: report/tables
+
 risk_tolerance:                # γ for each level (Section 2.6)
   low: 10
   medium: 5
