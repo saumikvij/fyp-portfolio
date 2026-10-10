@@ -171,3 +171,22 @@ def test_real_condition_number_matches_numpy():
     S = sample_covariance(data["returns_daily"][stocks], pd.Timestamp("2020-03-31"),
                           CFG["backtest"]["cov_window_days"], 21)
     assert condition_number(S) == pytest.approx(np.linalg.cond(S.values), rel=1e-8)
+
+
+def test_execution_lag_shifts_the_holding_window():
+    data = make_data()
+    rd, rm = data["returns_daily"], data["returns_monthly"]
+    dates = rm.index[2:6]
+    w = {"A": 0.6, "C": 0.4}
+    lag0 = run_backtest("l0", fixed(w), data, dates, WTOL, lag_days=0)
+    lag1 = run_backtest("l1", fixed(w), data, dates, WTOL, lag_days=1)
+    # Lag 0 reproduces the monthly table exactly.
+    np.testing.assert_allclose(lag0.gross.values,
+                               (0.6 * rm["A"] + 0.4 * rm["C"]).loc[lag0.gross.index].values)
+    # Lag 1: first window starts the day after t and ends the day after s.
+    t, s = dates[0], rm.index[rm.index > dates[0]][0]
+    i, j = rd.index.get_loc(t), rd.index.get_loc(s)
+    window = rd.iloc[i + 2:j + 2]
+    expected = float(((1 + window[["A", "C"]]).cumprod() @ pd.Series(w)).iloc[-1] - 1)
+    assert lag1.gross.iloc[0] == pytest.approx(expected)
+    assert not np.allclose(lag0.gross.values, lag1.gross.values)

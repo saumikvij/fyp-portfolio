@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 PROCESSED_FILES = {
     "prices": "prices.parquet",
+    "close": "close.parquet",
     "volume": "volume.parquet",
     "returns_daily": "returns_daily.parquet",
     "prices_monthly": "prices_monthly.parquet",
@@ -329,7 +330,8 @@ def build_dataset(cfg: dict, force_download: bool = False) -> dict[str, pd.DataF
 
     Returns
     -------
-    dict of DataFrames, also written to ``processed_dir``: ``prices``, ``volume``,
+    dict of DataFrames, also written to ``processed_dir``: ``prices`` (adjusted
+    close), ``close`` (split- but not dividend-adjusted, for market caps), ``volume``,
     ``returns_daily``, ``prices_monthly``, ``returns_monthly``, ``rf_daily``,
     ``rf_monthly``, ``sectors``, ``shares_outstanding``. Extreme daily returns are
     logged and saved to ``extreme_returns.csv``.
@@ -353,6 +355,10 @@ def build_dataset(cfg: dict, force_download: bool = False) -> dict[str, pd.DataF
     price_cols = stocks + [bench]
     prices = clean_prices(adj[price_cols], calendar, d["max_ffill_days"],
                           d["max_missing_frac"])
+    # Close adjusted for splits but not dividends: × shares outstanding ≈ market cap
+    # (used only for the Black–Litterman market weights, D4.2).
+    close = clean_prices(raw["Close"].unstack("Ticker")[price_cols], calendar,
+                         d["max_ffill_days"], d["max_missing_frac"])
     # A day whose price was forward filled had no trading: volume 0.
     volume = vol[price_cols].reindex(calendar).fillna(0.0)
 
@@ -368,6 +374,7 @@ def build_dataset(cfg: dict, force_download: bool = False) -> dict[str, pd.DataF
 
     out = {
         "prices": prices,
+        "close": close,
         "volume": volume,
         "returns_daily": rets,
         "prices_monthly": pm,

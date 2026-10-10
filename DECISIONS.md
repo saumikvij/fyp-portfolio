@@ -142,9 +142,185 @@ A full audit of `data/raw` and `data/processed` beyond the unit tests. Result: *
 - Weight stability = mean Σ|w_t − w_{t−1}| between consecutive *target* portfolios, which separates the optimizer changing its mind (T5) from price drift.
 
 ### D2.10 Findings from the baseline backtest (10 bps)
-- **Markowitz doesn't beat 1/N out of sample**, in line with DeMiguel et al. (2009): Sharpe 0.96 for S1 against 0.85–0.95 for S4. All Sharpe intervals overlap (about ±0.6), so no difference is statistically significant over 128 months.
-- **S4 has the worst drawdowns** (26–30% against 19% for 1/N and 24% for SPY) and the least stable weights: 13–20% of the portfolio changes each month, against 0 for 1/N. This is the empirical side of T5.
+- **Markowitz doesn't beat 1/N out of sample**, in line with DeMiguel et al. (2009): Sharpe 0.96 for S1 against 0.85–0.95 for S4. *(Corrected 3 Oct, see A2: the original wording inferred non-significance from overlapping individual intervals, which is not valid. The paired tests in D2.11 now support it.)*
+- **Drawdowns (corrected 3 Oct, see D2.12):** on month-end values S4 has the worst drawdowns (26–30% against 19% for 1/N and 24% for SPY), but on the daily path the order reverses: 1/N 33%, SPY 34%, S4 29–31%, S3 28%. Month-end prices hid how far 1/N and SPY fell inside March 2020, so *no strategy can be said to have the worst drawdown*. S4 does have the least stable weights. Its *target* weights change by 13–20% a month (Σ|w_t − w_{t−1}|), and its *turnover* after price drift is 16–21% a month (Σ|w_t − w_drifted|), against 0% and 4.6% for 1/N. See A2 for the difference between the two measures. This is the empirical side of T5.
 - **Minimum variance (S3) does what it promises:** lowest volatility (11.9%), CVaR (6.4% monthly) and drawdown (16%), but also the lowest return (12.0%) and the highest turnover (25%).
 - **Variance and CVaR disagree once:** SPY has lower volatility than S4 (γ = 5) (15.1% vs 15.3%) but a worse CVaR (monthly 9.1% vs 8.7%; daily 2.71% vs 2.57%). The gap is small but consistent at both frequencies. This is the tail-risk discussion the plan asks for.
 - **κ(Σ)** ranges from 129 to 1,540 (median 371), with the maximum in April 2020, when the COVID crash made one market-wide eigenvalue dominate. Errors in μ can therefore be amplified by factors in the hundreds (T5).
 - Costs matter most for the high-turnover strategies: going from 0 to 25 bps lowers S3's Sharpe from 0.86 to 0.79 but barely moves 1/N or SPY.
+
+### D2.11 Paired tests of Sharpe-ratio differences (added 3 Oct after advisor feedback)
+- **Chosen:** for every pair of strategies, a paired circular block bootstrap of the annualized Sharpe difference (block 6 months ≈ T^(1/3), 10 000 samples, p-value from the re-centred bootstrap distribution, in the spirit of Ledoit & Wolf 2008). It draws the same months for both strategies, so it keeps their correlation and short-run autocorrelation, and it doesn't assume normality.
+- **Check:** the Jobson–Korkie test with Memmel's (2003) correction, an analytic test that accounts for the correlation ρ between the two strategies but assumes i.i.d. normal returns. Both are in `src/metrics.py`; tests confirm Memmel's test has ≈ 5% size for equal Sharpes with ρ = 0.9, and that the bootstrap detects a real gap.
+- **Result (10 bps, `phase2_sharpe_tests.csv`):** none of the 15 pairs differs significantly at 5%. Smallest bootstrap p-value 0.29 (S4 γ = 5 vs γ = 2); 1/N vs SPY +0.09 [−0.11, 0.30], p = 0.37; 1/N vs Markowitz γ = 5 +0.08 [−0.33, 0.48], p = 0.70. The two methods agree on every pair (all p > 0.29).
+- Because the strategies are highly correlated (ρ = 0.71–0.97), the intervals for the *differences* are much narrower than the individual Sharpe intervals suggested, so the paired test is the right tool. No multiple-testing correction is needed since nothing rejects.
+
+## Advisor feedback (received 3 Oct 2026, on the Phase 2 report)
+
+### A2 Three points, and what was done
+1. **Statistical significance.** Overlapping individual Sharpe intervals do not show that a difference is insignificant. → Added direct paired tests of Sharpe differences that account for dependence between strategies (D2.11). The conclusion now rests on those tests, and D2.10 is corrected.
+2. **"13–20% monthly change" was ambiguous.** That figure is the change in *target* weights between consecutive months, Σ|w_t − w_{t−1}| (weight stability). The amount actually *traded* is turnover, Σ|w_t − w_drifted|, measured after a month of price drift: 16–21% a month for Markowitz. Both sum buys and sells, so 20% turnover means about 10% of the portfolio sold and 10% bought. From now on reports name the measure every time and lead with turnover (what costs are charged on). D2.10 updated.
+3. **Next-week priority: one forecasting model first.** → Phase 3 starts with a single model (elastic net) and a documented chronological training/validation procedure, compared with simple baselines, before LightGBM and the MLP are added (D3.x).
+
+## Phase 3 — ML forecasting, step 1 (3 Oct 2026)
+
+### D3.1 One model first: elastic net
+- Per the advisor (A2.3), one model is completed and compared with baselines before LightGBM and the MLP. The elastic net goes first: it is linear, its coefficients can be read directly, and ridge and lasso are special cases.
+
+### D3.2 Features: 13, not "about 15"
+- The plan's list, with one merge: "1-month momentum" and "1-month reversal" are the same signal (last month's return; the sign is learned), so it appears once as `rev_1m`. Definitions are in `src/features.py`.
+- Windows: 21 / 63 / 252 trading days. RSI uses simple 14-day averages of gains and losses (Wilder's exponential smoothing would also be point-in-time, but the simple version is easier to state). "Volume trend" uses share volume (log of 1-month over 12-month average), because historical shares outstanding aren't available for a true turnover ratio.
+- Features start in Jan 2011, the first month-end with 12 months of monthly prices and 252 trading days.
+
+### D3.3 Cross-sectional rank normalization to [−0.5, 0.5]
+- Each month every feature is replaced by its rank among the 51 stocks, scaled to [−0.5, 0.5], ties averaged (plan 4.1). This removes outliers and level shifts over time.
+
+### D3.4 Target: next-month excess return, not ranked
+- target(i, t) = r_{i,s} − r_f,s for the next month-end s, kept in return units because the Black–Litterman views Q (Phase 4) must be return forecasts. The realization date s is stored with every row, so training sets are cut by when a target became known, not by feature date.
+
+### D3.5 Chronological training and validation procedure
+At each forecast date t (Dec 2015 – Jul 2026, 128 month-ends):
+1. **Available data:** rows with target realized by t (target_date ≤ t), i.e. feature months up to t − 1 month. Expanding window starting Jan 2011.
+2. **Retrain once a year** (plan 4.3), starting Dec 2015. Split the available feature months in time order: the **last 24 months are validation**; all earlier months are the **tuning set**. Fit every (α, l1_ratio) on the tuning set, score by validation MSE, keep the best.
+3. **Refit** the chosen setting on tuning + validation months, so the most recent data is used.
+4. **Forecast** every month until the next retrain, using the fixed model and that month's features.
+- Example, first retrain (Dec 2015): tuning Jan 2011 – Nov 2013, validation Dec 2013 – Nov 2015, refit on Jan 2011 – Nov 2015 (3,009 rows, last target realized Dec 2015), forecasts made Dec 2015 – Nov 2016.
+- Every retrain is logged in `phase3_training_log.csv` (11 retrains).
+- No random k-fold anywhere; the seed is fixed (42) for reproducibility.
+
+### D3.6 Hyperparameter grid
+- α ∈ {1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2}, l1_ratio ∈ {0.1, 0.5, 0.9, 1.0}: 28 settings. The α range is set so that, for rank features in [−0.5, 0.5] and monthly returns with sd ≈ 7%, it spans "all features kept" to "all coefficients zero".
+
+### D3.7 Baselines
+- **Historical mean (plan baseline):** each stock's average realized excess return so far, refit monthly (expanding).
+- **Zero forecast:** the Gu, Kelly & Xiu (2020) benchmark for R²_oos.
+
+### D3.8 Leakage guarantees
+- Features: each month-end's features are computed from data sliced to that date; a test scrambles all data after t and checks no feature dated ≤ t changes.
+- Training: the procedure only uses rows with target_date ≤ t. Tests check, for every retrain, that the last target used is realized by the retrain date, that validation months lie after the tuning months and before the forecast date, and (end to end) that scrambling all raw data after t leaves every forecast dated ≤ t identical.
+- Target alignment was checked on the real data: the target at t has correlation 0.9998 with next month's return (the gap is r_f) and −0.003 with the current month's.
+
+### D3.9 Evaluation definitions
+- R²_oos pooled over all stock-months, against zero and against the historical mean.
+- Rank IC: monthly Spearman correlation; its mean and t-statistic are over months where the forecasts differ across stocks (all 128 for the historical mean, 80 for the elastic net, see D3.11). The difference to the baseline uses a paired t-test on the monthly IC.
+- Hit rate reported with the base rate (share of positive realized returns, 56.5%).
+- Quintile spread: top minus bottom fifth by forecast, equal-weighted, monthly.
+- Permutation importance: each retrained model is scored only on the months it actually forecast; MSE increase when one feature is shuffled, 20 repeats, weighted by block size.
+
+### D3.10 S5 definition
+- Mean-variance with μ = elastic-net forecasts, the same Σ and constraints as S4 (long-only, 10% cap), all three γ levels.
+
+### D3.11 Findings (step 1): no reliable signal in this universe
+- **Forecast accuracy:** R²_oos against zero is 2.01% (elastic net) vs 1.72% (historical mean). Most of both comes from predicting a positive average return (mean² / variance of the target ≈ 2.7%), not from telling stocks apart. Against the historical mean the elastic net improves R²_oos by only 0.30%.
+- **Ranking stocks:** the elastic net's rank IC is −0.013 (t = −0.48), the historical mean's +0.018 (t = 0.80); the difference has t = −1.44. Quintile spread: elastic net −0.14% a month (t = −0.26), historical mean +0.40% (t = 0.81). Hit rate 56.5% for both, equal to the base rate. Neither model ranks stocks better than chance.
+- **The model often switches itself off:** in 4 of 11 retrains (Dec 2016, 2017, 2020, 2021) validation chose α large enough to zero every coefficient, so every stock got the same forecast (48 of 128 months). The procedure is doing its job: in those years no feature helped on validation data.
+- **Why:** no feature has a significant univariate rank IC in this universe, either out of sample or over 2011–2026 (largest t-statistic 1.67, for 1-month volatility). This fits the literature that return anomalies are much weaker among the largest stocks (e.g. Gu, Kelly & Xiu 2020; Hou, Xue & Zhang 2020).
+- **Permutation importance:** beta, idiosyncratic volatility and RSI helped out of sample; 1-month volatility, max drawdown, max daily return and 12–1 momentum made forecasts worse.
+- **S5 (10 bps):** Sharpe 0.69–0.76 against 0.85–0.95 for S4 and 0.96 for 1/N, with much lower drawdowns (16–19%) but **turnover of 60–80% a month** after drift (target weights change 58–79% a month). Against S4 the differences are not significant (bootstrap p 0.44–0.50); against 1/N they are borderline (p = 0.07, 0.08, 0.21 for γ = 10, 5, 2).
+- **Interpretation for the project:** noisy forecasts fed straight into mean-variance produce unstable, expensive portfolios, which is exactly the T5 problem. This is the case Black–Litterman is designed for: with Ω set from each stock's past forecast errors, weak forecasts should be shrunk toward the market prior. S6 vs S5 in Phase 4 tests that directly.
+
+### D3.12 Open question for the advisor before step 2
+- Given D3.11, LightGBM and the MLP might find nothing a linear model missed. **Resolved 3 Oct:** the student chose option (a), to proceed as planned and report all three models honestly (D3.13–D3.17).
+
+### D2.12 Robustness of the Phase 2 results (added 3 Oct)
+- **Bootstrap block length:** Sharpe-difference p-values with 3- and 12-month blocks are close to the 6-month ones for every pair (`boot_p_block3`, `boot_p_block12` in `phase2_sharpe_tests.csv`); no conclusion changes.
+- **Multiple testing:** the 15 pairwise tests form one family; Holm-adjusted p-values (`boot_p_holm`) are all 1.0. Nothing was significant before adjustment either.
+- **Daily drawdowns:** `max_drawdown_d` is now reported next to the month-end figure; it changes the drawdown ranking (D2.10 corrected).
+- **Execution timing:** the main backtest trades at the close of the decision day t, as in the academic literature, since all signals use data up to that close. Trading one day later instead (`phase2_execution_lag.csv`) changes no Sharpe ratio by more than 0.02.
+
+## Phase 3 — ML forecasting, step 2: all three models (3 Oct 2026)
+
+### D3.13 LightGBM and MLP set-up
+- **LightGBM:** grid num_leaves ∈ {7, 15} × min_child_samples ∈ {100, 300}; learning rate 0.02, row and feature subsampling 0.8, L2 penalty 1. For each setting the number of trees (up to 2,000) is chosen by early stopping on the chronological validation months; the final refit uses that count. Deterministic mode, one thread, fixed seed.
+- **MLP:** scikit-learn MLPRegressor with 2 or 3 hidden layers ((32, 16) or (32, 16, 8)) × L2 penalty {1e-4, 1e-2}, Adam, batch 256, targets scaled to unit variance. **Early stopping uses the chronological validation months**: the network is trained one epoch at a time and the epoch with the lowest validation MSE is kept (patience 20, up to 200). scikit-learn's built-in early stopping is *not* used because it holds out a random 10% of rows, which would mix future months into training (plan 4.3). A test checks it stays off.
+- Same splits, retrain dates and leakage tests as the elastic net (D3.5, D3.8); the leakage and look-ahead tests now run for all three models.
+- **Capability check:** with a planted U-shaped signal that has no linear trend, LightGBM and the MLP reach rank IC > 0.3 while the elastic net stays near 0 (test). So the weak real-data results are not from models unable to learn.
+
+### D3.14 Ω-B ensembles
+- For each model and retrain, 10 extra copies are fitted on bootstrap samples of whole months (keeps each month's cross-section), each with its own seed. Ω-B for stock i at t = variance of the 10 copies' forecasts. The main forecast stays the single tuned model; the copies only measure disagreement. Saved to `data/ml/omega_b_<model>.parquet` for Phase 4.
+
+### D3.15 Findings: nonlinearity does not help, in forecasts or portfolios
+- **Validation kept the models very simple:** LightGBM chose 1–136 trees (of 2,000 allowed); the MLP chose 1–27 epochs, mostly ≤ 8; the elastic net zeroed every coefficient in 4 of 11 years. All three are telling us the same thing: little stable signal.
+- **Forecasts (Dec 2015 – Jul 2026):**
+
+| | R²_oos vs 0 | vs hist. mean | Rank IC (NW t) | Quintile spread/month (NW t) | Hit rate |
+|---|---|---|---|---|---|
+| Historical mean | 1.72% | 0 | +0.018 (0.71) | +0.40% (0.69) | 56.4% |
+| Elastic net | 2.01% | +0.30% | −0.013 (−0.55) | −0.14% (−0.29) | 56.5% |
+| LightGBM | 2.01% | +0.30% | +0.005 (0.35) | +0.20% (0.73) | 56.4% |
+| MLP | 1.53% | −0.19% | −0.007 (−0.50) | +0.07% (0.28) | 55.8% |
+
+  Base rate of positive returns: 56.5%. No model ranks stocks better than chance; LightGBM vs elastic net IC difference t = 1.12, MLP vs elastic net t = −0.09.
+- **Portfolios (S5, 10 bps):** Sharpe 0.69–0.76 (elastic net), 0.62–0.70 (LightGBM), 0.48–0.55 (MLP), against 0.85–0.95 for S4 and 0.96 for 1/N. Turnover a month after drift: 60–80%, 66–106% and 113–133%. Nonlinearity does not help the portfolio: S5 LightGBM − S5 elastic net = −0.02 (p = 0.89), MLP − elastic net = −0.17 (p = 0.23) at γ = 5.
+- **Significance after Holm correction (20 tests):** only "S5 with the MLP is worse than 1/N" survives (adjusted p = 0.010–0.017 at all γ). Everything else, including every S5-vs-S4 comparison, is not significant.
+- **Robustness:** conclusions unchanged with 3- or 12-month bootstrap blocks and with Newey–West t-statistics; trading one day later moves S5 Sharpe ratios by ≤ 0.03; daily drawdowns of S5 are 28–33%, similar to the baselines.
+- **Permutation importance** differs across models; the one consistent message is that 1-month volatility hurt out-of-sample forecasts in all three.
+
+### D3.16 Ω-B check: does disagreement track forecast errors?
+- Within each month, stocks with more ensemble disagreement do have larger squared forecast errors: average monthly rank correlation 0.13–0.14 (t = 7.7–9.0). Pooled over time it is ≈ 0, because the overall level of disagreement moves with how much each model was allowed to learn, not with how hard the month was.
+- Much of the within-month link is volatility: disagreement has rank correlation 0.42–0.51 with 3-month volatility, which itself predicts squared errors (0.22). After controlling for volatility a small link remains (partial correlation 0.03–0.05, t = 2.1–3.3).
+- For Phase 4: Ω-B should give larger uncertainty to more volatile stocks and is mildly informative beyond that; Ω-A (past errors) is the natural comparison (plan 4.4).
+
+### D3.17 What Phase 3 means for the project
+- The ML forecasts are weak, so the main research question moves to Phase 4: whether Black–Litterman, with Ω set from forecast errors (Ω-A) or disagreement (Ω-B), turns weak, noisy forecasts into stable portfolios (S6 vs S5) without losing to the classical benchmarks (S6 vs S4, S1). With weak views BL should stay close to the market prior, which is the intended behaviour.
+
+## Methodology review (3 Oct 2026)
+
+### R1 Review of Phases 0–3 before reporting
+Checked every method and claim for points an examiner could challenge. Changes made:
+1. Paired Sharpe-difference tests replace the comparison of separate intervals (D2.11).
+2. Holm correction for each family of Sharpe tests (D2.12, D3.15).
+3. Bootstrap p-values at 3 / 6 / 12-month blocks (D2.12).
+4. Newey–West t-statistics for IC and quintile spreads (D3.15).
+5. Daily drawdowns reported; this **corrected a Phase 2 claim** about drawdowns (D2.10, D2.12).
+6. One-day execution-lag robustness for every backtest (D2.12, D3.15).
+7. MLP early stopping on chronological, not random, validation (D3.13).
+8. Turnover vs target-weight change named explicitly everywhere (A2).
+9. Planted-signal tests show each model can find a real signal, linear or nonlinear, so weak results come from the data, not the code (D3.13).
+10. Ω-B checked against realized errors and volatility before it is used (D3.16).
+
+Unchanged and already documented: survivorship bias (D0.2, approved A1), current share counts (D0.9), daily-to-monthly covariance scaling (D1.1), Lo's i.i.d. Sharpe interval for single strategies (D2.7), simple-average RSI (D3.2).
+
+## Phase 4 — Black–Litterman integration (10 Oct 2026)
+
+### D4.1 Headline configuration fixed in advance
+- Headline S6 = elastic net views, Ω-A, τ = 0.05, γ = 5 (medium), written into `config.yaml` before any Phase 4 result was computed. Elastic net because it was the first, documented model (A2.3); Ω-A because it is the plan's main specification (Section 2.4); τ and γ are the plan's defaults. Every other combination is reported as an ablation, so the main conclusion cannot come from picking the best-looking variant.
+
+### D4.2 Market weights for the prior
+- w_mkt at t = close_t × shares outstanding, normalized over the 51 stocks. The close is split-adjusted but not dividend-adjusted (a true price level), added to the Phase 0 data as `close.parquet`; all earlier outputs are unchanged (largest difference 3e-15). Shares are the current all-class snapshot (D0.9, approved A1).
+
+### D4.3 Prior: Π = δΣw_mkt with δ = 2.5
+- Monthly Σ (same estimate the optimizer uses), so Π is a monthly excess return. A test confirms the defining property: with only the budget constraint and γ = δ, mean-variance at μ = Π returns exactly w_mkt.
+
+### D4.4 Ω-A: past squared errors with a warm-up
+- σ²ᵢ = (Σ of the last 24 squared errors + 12·varᵢ) / (nᵢ + 12), where varᵢ is the stock's monthly return variance (diagonal of Σ). Only errors already realized at t are used (forecasts made before t, whose month has ended).
+- **Why the warm-up:** forecasts start in Dec 2015, so early in the backtest there are no past errors. varᵢ is the error variance of a forecast with no skill, a neutral starting value that fades as errors accumulate (half weight after 12 months).
+
+### D4.5 Ω-B: raw (plan definition) and level-calibrated
+- **Raw Ω-B** = variance of the 10 bootstrap copies' forecasts. Its median is about 0.05 × τσ², against about 19 × τσ² for Ω-A: the copies agree far more closely than the forecasts match reality. Disagreement measures how much the *estimate* depends on the sample, not how wrong the *forecast* is.
+- **Calibrated Ω-B ("B-cal")** keeps the relative disagreement across stocks but rescales the level each month so its average equals Ω-A's. Reported as a variant so the comparison Ω-A vs Ω-B isn't decided by scale alone. A floor of 1e-12 keeps Ω positive when copies agree exactly.
+
+### D4.6 Posterior computation and the covariance used in the optimizer
+- μ_BL uses the update form Π + τΣ(τΣ + Ω)⁻¹(Q − Π), which equals the T6 precision form (tested, with the GLS form too) and stays stable as Ω → 0.
+- The optimizer uses Σ, not the posterior predictive Σ + M of He & Litterman (2002). Since M ⪯ τΣ, Σ + M ⪯ 1.05Σ at τ = 0.05: at most the effect of a 5% higher γ. Using Σ keeps S4, S5 and S6 on the same risk model, so they differ only in μ.
+
+### D4.7 Strategy set and tests
+- S6 for every model × {Ω-A, Ω-B, Ω-B-cal} at γ = 5; "BL prior only" (μ = Π, the Ω → ∞ limit of Cor. 6.1) as a reference. Same constraints as S4 and S5.
+- Sharpe tests: S6 vs S5, S4 and S1 for all nine S6 variants plus headline vs prior: one family of 28 tests, Holm-adjusted, with 3- and 12-month blocks as a check.
+- Stability: paired test of the monthly turnover difference S6 − S5, Newey–West t.
+
+### D4.8 Findings
+- **BL makes ML portfolios far more stable.** Headline turnover 30% a month against 72% for S5 (difference −41.5 points, NW t = −5.3). With Ω-A the reduction holds for every model: LightGBM 83% → 32% (t = −9.0), MLP 125% → 52% (t = −20.2). Calibrated Ω-B gives similar reductions (t = −5.6 to −20.7).
+- **Raw Ω-B does not stabilize anything:** turnover is unchanged (difference −3 to +3 points) because the views are treated as almost certain (μ_BL moves 92–99% of the way to the views).
+- **Returns:** headline Sharpe 0.876 against 0.693 (S5), 0.876 (S4), 0.957 (1/N), 0.963 (prior only). After Holm correction no Sharpe difference in the family of 28 is significant (smallest adjusted p = 0.13). Before correction, BL improves the MLP portfolio (S6 Ω-A vs S5: +0.34, p = 0.011; Ω-B-cal: +0.36, p = 0.004), which does not survive the correction.
+- **The views do not add value over the prior:** headline vs prior only −0.09 (p = 0.23). This is consistent with Phase 3: with no forecasting signal, the best BL can do is stay near the market prior, and it does better the closer it stays (D4.9).
+- **Tail risk and drawdowns** of S6 (monthly CVaR 7.6%, daily drawdown 31.5%) are in the same range as the other strategies; no strategy is clearly worse in the tail.
+
+### D4.9 Ablations (around the headline)
+- **τ:** Sharpe falls and turnover rises steadily as τ grows (τ = 0.01: 0.94 and 19%; 0.25: 0.79 and 52%). **Ω scale:** ×4 gives 0.94 and 19%, ×0.25 gives 0.81 and 49%. Both say the same: the less weight on the views, the better, as expected when the views have no skill.
+- **γ:** S6 beats S5 at every γ (γ = 10: 0.85 vs 0.69; γ = 2: 1.00 vs 0.76). γ = 2 has the highest Sharpe of any strategy (1.00), but it is one of many ablations, not a pre-specified hypothesis, so it is not presented as a finding.
+- **Costs:** the BL advantage over S5 grows with costs (headline vs S5 at 25 bps: 0.835 vs 0.592), because S5 trades so much more.
+- **Models:** with Ω-A the three models end close together (0.86–0.89), because BL shrinks all of them toward the same prior.
+
+### D4.10 Why the views still move μ_BL noticeably
+- Diagonal Ω-A is about 19 × τσ², yet μ_BL moves about 50% of the way to the views across stocks (elastic net). The reason is that τΣ is far from diagonal: along the few market and sector directions with large eigenvalues the prior is uncertain, so views pass through there, while stock-specific differences are shrunk hard. A diagonal ratio understates the views' influence; the diagnostics table reports the actual movement.

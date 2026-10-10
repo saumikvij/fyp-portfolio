@@ -20,8 +20,8 @@ All parameters are in [config.yaml](config.yaml). Run every command from the rep
 | 0. Setup & data | done | `python -m src.data` |
 | 1. Optimization core | done | `python -m notebooks.phase1_frontier` |
 | 2. Backtest engine & baselines | done | `python -m notebooks.phase2_backtest` |
-| 3. ML forecasting | not started | — |
-| 4. Black–Litterman integration | not started | — |
+| 3. ML forecasting | done | `python -m notebooks.phase3_forecasting` |
+| 4. Black–Litterman integration | done | `python -m notebooks.phase4_black_litterman` |
 | 5. Demo & final report | not started | — |
 
 ### Phase 0 — data
@@ -104,6 +104,84 @@ Outputs:
 | `report/tables/phase2_returns.csv` | monthly net returns (10 bps) |
 | `report/figures/backtest_wealth.png` | growth of $1 for S1, S2, S3 and S4 (γ = 5) |
 | `report/figures/condition_number.png` | κ(Σ) over time |
+
+### Phase 3 — ML forecasting
+
+Following the advisor's feedback (DECISIONS.md A2), the elastic net was built and evaluated first (D3.1–D3.12); LightGBM, the MLP and the Ω-B ensembles were then added with the same procedure (D3.13–D3.17).
+
+```bash
+pytest tests/test_features.py tests/test_models.py   # features, leakage, models, forecast metrics
+python -m notebooks.phase3_forecasting               # 3 models + ensembles, evaluation, S5 (~1 min)
+```
+
+- [src/features.py](src/features.py): 13 price- and volume-based features at each month-end, each computed from data sliced to that date; cross-sectional rank normalization; target = next-month excess return with its realization date.
+- [src/models.py](src/models.py): historical-mean baseline, elastic net, LightGBM and MLP (early stopping on chronological validation months); `walk_forward` runs the chronological procedure below, logs every retrain and fits the Ω-B bootstrap copies.
+- [src/ml_eval.py](src/ml_eval.py): R²_oos (vs zero, historical mean or another model), monthly rank IC, hit rate, quintile spread, Newey–West t-statistics, out-of-sample permutation importance.
+- `forecast_strategy` in [src/backtest.py](src/backtest.py): S5, mean-variance with the forecasts as μ.
+
+**Chronological procedure** (at each month-end t; full detail in D3.5):
+1. Only rows whose target is realized by t are available for training.
+2. Once a year, the available feature months are split in time order: the last 24 months are validation, everything before is the tuning set. Each hyperparameter setting is fitted on the tuning set and scored by validation MSE (LightGBM and the MLP also early-stop on those months); the best is refit on all available months, plus 10 bootstrap copies for Ω-B.
+3. The model forecasts next-month excess returns from the features dated t.
+
+Every retrain is written to `report/tables/phase3_training_log.csv` (tuning, validation and training months, chosen parameters, coefficients).
+
+| Test | Result checked |
+|---|---|
+| `test_leakage_training_targets_realized_by_retrain_date` | no target realized after t is used by the model forecasting at t |
+| `test_leakage_validation_strictly_before_forecast_and_after_tuning` | validation months are after the tuning months and before the forecast date |
+| `test_forecasts_unchanged_by_future_data`, `test_features_unchanged_by_future_data` | scrambling all data after t changes no feature or forecast dated ≤ t |
+| `test_elastic_net_recovers_a_planted_signal` | with a known signal, the model finds it and reaches the theoretical best IC |
+| `test_nonlinear_models_find_a_nonlinear_signal_a_linear_model_cannot` | LightGBM and the MLP find a U-shaped signal the elastic net cannot |
+| `test_mlp_never_uses_random_validation_split` | the MLP's early stopping uses only the chronological validation months |
+| `test_runs_are_reproducible` | identical forecasts and Ω-B on re-runs (fixed seeds) |
+
+Outputs:
+
+| File | Contents |
+|---|---|
+| `report/tables/phase3_training_log.csv` | every retrain of every model: splits, hyperparameters, validation MSE, coefficients |
+| `report/tables/phase3_forecast_eval.csv` | R²_oos, IC, hit rate, quintile spread (with Newey–West t) for zero / historical mean / the three models |
+| `report/tables/phase3_omega_b_check.csv` | does ensemble disagreement (Ω-B) track realized forecast errors? |
+| `report/tables/phase3_importance.csv` | permutation importance per model |
+| `report/tables/phase3_s5_metrics.csv` | S5 for each model and γ next to S1 and S4, incl. daily drawdown and 1-day-lag Sharpe |
+| `report/tables/phase3_s5_sharpe_tests.csv` | paired Sharpe-difference tests (S5 vs S4, S1, and nonlinear vs linear), Holm-adjusted |
+| `data/ml/forecasts_<model>.parquet`, `data/ml/omega_b_<model>.parquet` | forecasts and Ω-B for Phase 4 (git-ignored; rebuilt by the script) |
+| `report/figures/forecast_ic.png` | cumulative rank IC over time |
+| `report/figures/feature_importance.png` | permutation importance, one panel per model |
+
+Phase 2 outputs now also include paired Sharpe-difference tests with Holm adjustment and alternative block lengths (`phase2_sharpe_tests.csv`, D2.11–D2.12) and a one-day execution-lag check (`phase2_execution_lag.csv`). See R1 in DECISIONS.md for the full methodology review.
+
+### Phase 4 — Black–Litterman integration
+
+```bash
+pytest tests/test_black_litterman.py           # T6, Cor. 6.1, prior, Ω, look-ahead
+python -m notebooks.phase4_black_litterman     # S6 + ablations (~1 min; needs Phase 3 outputs in data/ml)
+```
+
+- [src/black_litterman.py](src/black_litterman.py): market weights (close × shares), prior Π = δΣw_mkt, posterior mean in three equivalent forms (Bayesian, GLS, update), posterior covariance, forecast errors, Ω-A (past squared errors, shrunk toward return variance at the start) and Ω-B (ensemble disagreement, raw or level-calibrated), and `bl_inputs` for one date.
+- `black_litterman_strategy` in [src/backtest.py](src/backtest.py): S6; `views=False` gives the prior alone (the Ω → ∞ limit).
+- The headline S6 (elastic net, Ω-A, τ = 0.05, γ = 5) was fixed in `config.yaml` before any result was computed; all other variants are ablations (D4.1).
+
+| Test | Result checked |
+|---|---|
+| `test_T6_bayesian_and_gls_derivations_agree` | Bayesian, GLS and update forms of μ_BL agree (P = I and 3 mixed views) |
+| `test_T6_posterior_covariance`, `test_T6_scalar_case_is_precision_weighted_average` | M is symmetric PD and τΣ − M ⪰ 0; diagonal case is a precision-weighted average |
+| `test_cor61_huge_omega_returns_prior`, `test_cor61_tiny_omega_makes_views_hold_exactly` | Ω → ∞ gives Π; Ω → 0 gives Pμ = Q |
+| `test_reverse_optimization_recovers_market_weights` | at μ = Π, mean-variance with γ = δ returns w_mkt |
+| `test_bl_inputs_unchanged_by_future_data`, `test_s6_backtest_unchanged_by_future_data_*` | Π, Q, Ω, μ_BL and S6 weights at t use nothing after t |
+
+Outputs:
+
+| File | Contents |
+|---|---|
+| `report/tables/phase4_metrics.csv` | every strategy and ablation (γ, τ, Ω scale, costs) |
+| `report/tables/phase4_diagnostics.csv` | how far μ_BL moves from the prior toward the views; Ω relative to τσ² |
+| `report/tables/phase4_sharpe_tests.csv` | S6 vs S5, S4, S1 and the prior, Holm-adjusted, with alternative block lengths |
+| `report/tables/phase4_turnover_tests.csv` | paired test of monthly turnover, S6 vs S5 |
+| `report/figures/bl_wealth.png` | growth of $1: S1, S4, S5 and headline S6 |
+| `report/figures/bl_turnover.png` | turnover of S5 vs S6 (each Ω) per model |
+| `report/figures/bl_tau.png` | Sharpe and turnover of S6 across τ |
 
 ## Tests
 

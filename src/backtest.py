@@ -24,6 +24,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
+from src.black_litterman import bl_inputs
 from src.estimators import historical_mean, sample_covariance
 from src.optimization import Constraints, mean_variance, min_variance
 
@@ -37,6 +38,8 @@ class History:
     returns_monthly: pd.DataFrame
     rf_monthly: pd.Series
     sectors: pd.Series
+    close: pd.DataFrame | None = None      # unadjusted close (for market caps), <= t
+    shares: pd.Series | None = None        # shares outstanding snapshot (static)
 
 
 Strategy = Callable[[History], pd.Series]
@@ -62,6 +65,9 @@ def history_at(data: dict, t: pd.Timestamp) -> History:
         returns_monthly=data["returns_monthly"].loc[:t],
         rf_monthly=data["rf_monthly"]["rf"].loc[:t],
         sectors=data["sectors"]["sector"],
+        close=data["close"].loc[:t] if "close" in data else None,
+        shares=(data["shares_outstanding"]["shares_outstanding"]
+                if "shares_outstanding" in data else None),
     )
 
 
@@ -139,7 +145,7 @@ class BacktestResult:
 
 
 def run_backtest(name: str, strategy: Strategy, data: dict, dates: pd.DatetimeIndex,
-                 weight_tol: float) -> BacktestResult:
+                 weight_tol: float, lag_days: int = 0) -> BacktestResult:
     """Run a strategy through the monthly walk-forward loop.
 
     Parameters
@@ -150,10 +156,16 @@ def run_backtest(name: str, strategy: Strategy, data: dict, dates: pd.DatetimeIn
     data : output of ``src.data.load_processed``.
     dates : rebalance dates t (see ``rebalance_dates``).
     weight_tol : dust threshold for ``clean_weights``.
+    lag_days : trading days between the decision (close of t) and the trade. 0 = trade
+        at the close of t, the standard assumption; 1 = trade at the next close, a
+        robustness check. With a lag the holding window shifts by the same number of
+        days (the last window is cut at the end of the data).
 
     Returns
     -------
     BacktestResult with weights, gross returns, turnover and daily gross returns.
+    Monthly gross returns are compounded from the daily path, which for lag 0 equals
+    ``returns_monthly`` (tested).
 
     Raises
     ------
@@ -163,7 +175,7 @@ def run_backtest(name: str, strategy: Strategy, data: dict, dates: pd.DatetimeIn
     """
     rm, rd = data["returns_monthly"], data["returns_daily"]
     assets = rm.columns
-    month_ends = rm.index
+    month_ends, day_idx = rm.index, rd.index
     w_rows, gross, turnover, daily, first = {}, {}, {}, [], []
     drifted = pd.Series(0.0, index=assets)   # start in cash
 
@@ -174,16 +186,17 @@ def run_backtest(name: str, strategy: Strategy, data: dict, dates: pd.DatetimeIn
             raise ValueError(f"{name}: invalid weights at {t.date()} (sum {w.sum():.6f})")
         w = clean_weights(w, weight_tol)
 
-        r = rm.loc[s, assets]
-        g = float(w @ r)
+        # Buy-and-hold over the holding window (trade day, trade day of the next month].
+        start = day_idx.get_loc(t) + lag_days
+        end = min(day_idx.get_loc(s) + lag_days, len(day_idx) - 1)
+        days = rd.iloc[start + 1:end + 1][assets]
+        value = (1 + days).cumprod() @ w
+        g = float(value.iloc[-1] - 1)
+        r = (1 + days).prod() - 1
         w_rows[t] = w
         gross[s] = g
         turnover[s] = float((w - drifted).abs().sum())
         drifted = w * (1 + r) / (1 + g)
-
-        # Daily path of a buy-and-hold position over month s.
-        days = rd.loc[(rd.index > t) & (rd.index <= s), assets]
-        value = (1 + days).cumprod() @ w
         daily.append(value / value.shift(1, fill_value=1.0) - 1)
         first.append(pd.Series([True] + [False] * (len(days) - 1), index=days.index))
 
@@ -287,5 +300,70 @@ def markowitz_strategy(stocks: list[str], cfg: dict, gamma: float) -> Strategy:
         mu = historical_mean(hist.returns_monthly[stocks], hist.t,
                              cfg["estimators"]["mean_window_months"])
         return mean_variance(mu, Sigma, gamma, _constraints(hist, cfg),
+                             cfg["optimization"]["solver"]).weights
+    return strategy
+
+
+def forecast_strategy(forecasts: pd.DataFrame, stocks: list[str], cfg: dict,
+                      gamma: float) -> Strategy:
+    """S5: mean-variance with ML forecasts of next-month excess returns as μ (no BL).
+
+    ``forecasts.loc[t]`` must have been produced from data dated <= t (guaranteed by
+    ``src.models.walk_forward`` and its look-ahead tests); the strategy reads only
+    the row for the current rebalance date.
+
+    Parameters
+    ----------
+    forecasts : forecast date x ticker, from ``walk_forward``.
+    stocks : the universe.
+    cfg : config (windows, cap, sector bounds, solver).
+    gamma : risk aversion γ.
+
+    Returns
+    -------
+    Strategy function.
+
+    Theorem: T1, T4 (the QP solved each month).
+    """
+    def strategy(hist: History) -> pd.Series:
+        mu = forecasts.loc[hist.t, stocks]
+        return mean_variance(mu, _sigma(hist, stocks, cfg), gamma, _constraints(hist, cfg),
+                             cfg["optimization"]["solver"]).weights
+    return strategy
+
+
+def black_litterman_strategy(forecasts: pd.DataFrame, ensemble_var: pd.DataFrame | None,
+                             stocks: list[str], cfg: dict, gamma: float, omega_kind: str,
+                             tau: float, omega_scale: float = 1.0,
+                             views: bool = True) -> Strategy:
+    """S6: mean-variance with the Black–Litterman posterior mean μ_BL as μ.
+
+    At each t: Σ from the trailing window, market prior Π = δΣw_mkt, views Q = ML
+    forecasts made at t, Ω from past errors (Ω-A) or ensemble disagreement (Ω-B),
+    μ_BL by T6, then the same constrained problem as S4 and S5.
+
+    Parameters
+    ----------
+    forecasts : ML forecasts (date x ticker), produced from data <= each date.
+    ensemble_var : bootstrap-copy variance (date x ticker), for Ω-B.
+    stocks : the universe.
+    cfg : config.
+    gamma : risk aversion γ.
+    omega_kind : "A", "B" or "B-cal" (see ``src.black_litterman.bl_inputs``).
+    tau : τ.
+    omega_scale : multiplies Ω (ablation).
+    views : False uses μ = Π (the prior alone, the Ω → ∞ limit of Cor. 6.1).
+
+    Returns
+    -------
+    Strategy function.
+
+    Theorem: T6 (posterior), Cor. 6.1 (views=False), T1/T4 (the QP).
+    """
+    def strategy(hist: History) -> pd.Series:
+        inp = bl_inputs(hist, forecasts, ensemble_var, stocks, cfg, omega_kind, tau,
+                        omega_scale)
+        mu = inp["mu_bl"] if views else inp["Pi"]
+        return mean_variance(mu, inp["Sigma"], gamma, _constraints(hist, cfg),
                              cfg["optimization"]["solver"]).weights
     return strategy

@@ -10,7 +10,9 @@ import pytest
 from src.data import load_config
 from src.metrics import (annualized_return, annualized_vol, cvar_historical,
                          cvar_tail_average, max_drawdown, performance_summary,
-                         sharpe_confidence_interval, sharpe_ratio, var_historical,
+                         sharpe_confidence_interval, sharpe_difference_bootstrap,
+                         sharpe_difference_memmel, sharpe_ratio, var_historical,
+                         holm_adjust,
                          weight_stability)
 
 CFG = load_config()
@@ -160,3 +162,69 @@ def test_performance_summary_keys():
     assert {"ann_return", "ann_vol", "sharpe", "sharpe_lo", "sharpe_hi", "max_drawdown",
             "var_m", "cvar_m", "avg_turnover"} <= set(s)
     assert s["sharpe_lo"] < s["sharpe"] < s["sharpe_hi"]
+
+
+# --------------------------------------------------------------------------- Sharpe differences
+
+
+def correlated_pair(rng, T, rho, mu1, mu2, sd=0.04):
+    z = rng.standard_normal((T, 2))
+    z[:, 1] = rho * z[:, 0] + np.sqrt(1 - rho ** 2) * z[:, 1]
+    return monthly(mu1 + sd * z[:, 0]), monthly(mu2 + sd * z[:, 1])
+
+
+def test_memmel_formula():
+    rng = np.random.default_rng(3)
+    r1, r2 = correlated_pair(rng, 120, 0.8, 0.01, 0.005)
+    rf = monthly(np.zeros(120))
+    out = sharpe_difference_memmel(r1, r2, rf)
+    s1, s2 = r1.mean() / r1.std(ddof=1), r2.mean() / r2.std(ddof=1)
+    rho = np.corrcoef(r1, r2)[0, 1]
+    theta = (2 * (1 - rho) + 0.5 * (s1 ** 2 + s2 ** 2 - 2 * s1 * s2 * rho ** 2)) / 120
+    assert out["z"] == pytest.approx((s1 - s2) / np.sqrt(theta))
+    assert out["diff"] == pytest.approx(np.sqrt(12) * (s1 - s2))
+
+
+def test_memmel_size_with_correlated_equal_sharpes():
+    """Equal true Sharpe, correlation 0.9: rejection rate at 5% should be about 5%."""
+    rng = np.random.default_rng(4)
+    rf = monthly(np.zeros(128))
+    rejections = [sharpe_difference_memmel(*correlated_pair(rng, 128, 0.9, 0.008, 0.008),
+                                           rf)["p_value"] < 0.05 for _ in range(2000)]
+    assert abs(np.mean(rejections) - 0.05) < 0.015
+
+
+def test_bootstrap_identical_series():
+    r = monthly(np.random.default_rng(5).normal(0.01, 0.04, 100))
+    out = sharpe_difference_bootstrap(r, r, monthly(np.zeros(100)), block=6, n_boot=500, seed=0)
+    assert out["diff"] == 0.0 and out["ci_lo"] == 0.0 and out["ci_hi"] == 0.0
+    assert out["p_value"] == 1.0
+
+
+def test_bootstrap_size_and_power():
+    """Equal Sharpes rejected rarely; a large, highly correlated gap is detected."""
+    rng = np.random.default_rng(6)
+    rf = monthly(np.zeros(128))
+    null = [sharpe_difference_bootstrap(*correlated_pair(rng, 128, 0.9, 0.008, 0.008), rf,
+                                        block=6, n_boot=1000, seed=i)["p_value"] < 0.05
+            for i in range(300)]
+    assert np.mean(null) < 0.10
+    r1, r2 = correlated_pair(rng, 128, 0.95, 0.015, 0.0)
+    assert sharpe_difference_bootstrap(r1, r2, rf, block=6, n_boot=2000, seed=0)["p_value"] < 0.01
+
+
+def test_bootstrap_agrees_with_memmel_in_sign_and_scale():
+    rng = np.random.default_rng(7)
+    r1, r2 = correlated_pair(rng, 128, 0.7, 0.010, 0.004)
+    rf = monthly(np.zeros(128))
+    b = sharpe_difference_bootstrap(r1, r2, rf, block=6, n_boot=4000, seed=1)
+    m = sharpe_difference_memmel(r1, r2, rf)
+    assert b["diff"] == pytest.approx(m["diff"])
+    assert b["ci_lo"] < b["diff"] < b["ci_hi"]
+
+
+def test_holm_adjust():
+    p = [0.01, 0.04, 0.03, 0.20]
+    # Sorted: 0.01*4=0.04, 0.03*3=0.09, 0.04*2=0.08 -> 0.09 (monotone), 0.20*1 -> 0.20.
+    np.testing.assert_allclose(holm_adjust(p), [0.04, 0.09, 0.09, 0.20])
+    assert (holm_adjust(p) >= np.array(p)).all()

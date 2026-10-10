@@ -199,6 +199,9 @@ def test_processed_columns_and_dates(data):
         assert df.index[0] >= start and df.index[-1] <= end, key
         assert not df.isna().any().any(), key
     assert (data["prices"] > 0).all().all()
+    # Unadjusted close: same shape, positive, and never below the dividend-adjusted price.
+    assert data["close"].shape == data["prices"].shape and not data["close"].isna().any().any()
+    assert (data["close"] >= data["prices"] * (1 - 1e-9)).all().all()
     assert (data["volume"] >= 0).all().all()
 
 

@@ -5,6 +5,9 @@ Run from the repo root:  python -m notebooks.phase2_backtest
 Writes to ``phase2.table_dir``:
 - phase2_metrics.csv       every metric, for every strategy and cost level
 - phase2_tail_ranking.csv  strategies ranked by volatility and by CVaR (10 bps)
+- phase2_sharpe_tests.csv  paired tests of Sharpe differences for every pair (10 bps),
+                           with Holm-adjusted p-values and other block lengths
+- phase2_execution_lag.csv Sharpe and return when trading one day after the decision
 - phase2_condition.csv     κ(Σ), λ_min, λ_max of the covariance at each rebalance
 - phase2_returns.csv       monthly net returns at the main cost level
 and to ``phase2.figure_dir``:
@@ -28,7 +31,10 @@ from src.backtest import (buy_and_hold, equal_weight, markowitz_strategy,
                           min_variance_strategy, rebalance_dates, run_backtest)
 from src.data import load_config, load_processed
 from src.estimators import condition_number, sample_covariance
-from src.metrics import performance_summary
+from itertools import combinations
+
+from src.metrics import (holm_adjust, performance_summary, sharpe_difference_bootstrap,
+                         sharpe_difference_memmel)
 
 # Reference palette (dataviz skill), light mode, categorical slots in fixed order.
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
@@ -69,10 +75,12 @@ def main() -> None:
         strategies[f"S4 Markowitz γ={gamma} ({level})"] = markowitz_strategy(stocks, cfg, gamma)
     main_s4 = f"S4 Markowitz γ={cfg['risk_tolerance'][p2['main_gamma']]} ({p2['main_gamma']})"
 
-    results = {}
+    results, lagged = {}, {}
+    lag = bt["execution_lag_robust"]
     for name, strat in strategies.items():
         t0 = time.time()
         results[name] = run_backtest(name, strat, data, dates, wtol)
+        lagged[name] = run_backtest(name, strat, data, dates, wtol, lag_days=lag)
         print(f"{name:32s} {len(dates)} rebalances in {time.time() - t0:.1f}s")
 
     # ---------------------------------------------------------------- metrics
@@ -91,6 +99,36 @@ def main() -> None:
                          "rank_by_vol": main["ann_vol"].rank().astype(int),
                          "rank_by_cvar": main["cvar_m"].rank().astype(int)}).sort_values("ann_vol")
     rank.to_csv(tab_dir / "phase2_tail_ranking.csv")
+
+    # Robustness: trade one day after the decision instead of at the same close.
+    lag_tab = pd.DataFrame({
+        n: {"sharpe_lag0": main.loc[n, "sharpe"],
+            "sharpe_lag1": performance_summary(lagged[n].net(bt["cost_bps"]), rf)["sharpe"],
+            "ann_return_lag0": main.loc[n, "ann_return"],
+            "ann_return_lag1": performance_summary(lagged[n].net(bt["cost_bps"]), rf)["ann_return"]}
+        for n in results}).T
+    lag_tab.to_csv(tab_dir / "phase2_execution_lag.csv")
+    print(f"\nExecution-lag robustness ({lag} trading day later):")
+    print(lag_tab.round(3).to_string())
+
+    # Paired tests of Sharpe differences (account for dependence between strategies).
+    tests = []
+    for a, b in combinations(results, 2):
+        ra, rb = results[a].net(bt["cost_bps"]), results[b].net(bt["cost_bps"])
+        boot = sharpe_difference_bootstrap(ra, rb, rf, block=p2["sharpe_test_block"],
+                                           n_boot=p2["sharpe_test_boot"], seed=cfg["seed"])
+        mem = sharpe_difference_memmel(ra, rb, rf)
+        row = {"a": a, "b": b, "sharpe_diff": boot["diff"], "corr": mem["rho"],
+               "boot_ci_lo": boot["ci_lo"], "boot_ci_hi": boot["ci_hi"],
+               "boot_p": boot["p_value"], "memmel_z": mem["z"], "memmel_p": mem["p_value"]}
+        for blk in p2["sharpe_test_block_robust"]:
+            row[f"boot_p_block{blk}"] = sharpe_difference_bootstrap(
+                ra, rb, rf, block=blk, n_boot=p2["sharpe_test_boot"],
+                seed=cfg["seed"])["p_value"]
+        tests.append(row)
+    tests = pd.DataFrame(tests)
+    tests["boot_p_holm"] = holm_adjust(tests["boot_p"])
+    tests.to_csv(tab_dir / "phase2_sharpe_tests.csv", index=False)
     pd.DataFrame({n: r.net(bt["cost_bps"]) for n, r in results.items()}).to_csv(
         tab_dir / "phase2_returns.csv")
 
@@ -99,6 +137,8 @@ def main() -> None:
     show = main[["ann_return", "ann_vol", "sharpe", "sharpe_lo", "sharpe_hi", "max_drawdown",
                  "var_m", "cvar_m", "avg_turnover", "weight_stability"]]
     print(show.round(3).to_string())
+    print("\nPaired Sharpe-difference tests (A − B), block bootstrap and Memmel:")
+    print(tests.round(3).to_string(index=False))
     print("\nRanking by volatility vs by monthly CVaR (1 = least risky):")
     print(rank.round(4).to_string())
 

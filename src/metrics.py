@@ -221,7 +221,8 @@ def performance_summary(r: pd.Series, rf: pd.Series, *, alpha: float = 0.95,
     -------
     dict: ann_return, ann_vol, sharpe, sharpe_lo, sharpe_hi, max_drawdown,
     var_m, cvar_m (monthly, as losses), and when given avg_turnover,
-    weight_stability, var_d, cvar_d.
+    weight_stability, var_d, cvar_d, max_drawdown_d (drawdown on the daily path,
+    which also catches falls that recover within a month).
 
     Theorem: T7 (CVaR reported alongside variance); O1 (Sharpe CI, cited).
     """
@@ -241,4 +242,111 @@ def performance_summary(r: pd.Series, rf: pd.Series, *, alpha: float = 0.95,
     if daily is not None:
         out["var_d"] = var_historical(daily, alpha)
         out["cvar_d"] = cvar_historical(daily, alpha)
+        out["max_drawdown_d"] = max_drawdown(daily)
     return out
+
+
+# --------------------------------------------------------------------------- Sharpe differences
+
+
+def sharpe_difference_memmel(r1: pd.Series, r2: pd.Series, rf: pd.Series,
+                             periods_per_year: int = 12) -> dict[str, float]:
+    """Test H0: SR1 = SR2 with the Jobson–Korkie statistic, Memmel (2003) correction.
+
+    Uses the correlation ρ between the two strategies' excess returns, so it accounts
+    for their dependence (unlike comparing two separate confidence intervals):
+        θ = [2(1 − ρ) + ½(SR1² + SR2² − 2·SR1·SR2·ρ²)] / T,   z = (SR1 − SR2) / √θ,
+    with per-period Sharpe ratios. Assumes i.i.d. normal returns; see
+    ``sharpe_difference_bootstrap`` for a version without that assumption.
+
+    Parameters
+    ----------
+    r1, r2 : returns of the two strategies over the same periods.
+    rf : risk-free returns for those periods.
+    periods_per_year : q, used to annualize the reported difference.
+
+    Returns
+    -------
+    dict with ``diff`` (annualized SR1 − SR2), ``z``, ``p_value`` (two-sided), ``rho``.
+
+    Theorem: none (statistical test; Jobson & Korkie 1981, Memmel 2003).
+    """
+    e1 = (r1 - rf.reindex(r1.index)).values
+    e2 = (r2 - rf.reindex(r2.index)).values
+    T = len(e1)
+    s1, s2 = e1.mean() / e1.std(ddof=1), e2.mean() / e2.std(ddof=1)
+    rho = np.corrcoef(e1, e2)[0, 1]
+    theta = (2 * (1 - rho) + 0.5 * (s1 ** 2 + s2 ** 2 - 2 * s1 * s2 * rho ** 2)) / T
+    z = (s1 - s2) / np.sqrt(theta)
+    return {"diff": float(np.sqrt(periods_per_year) * (s1 - s2)), "z": float(z),
+            "p_value": float(2 * norm.sf(abs(z))), "rho": float(rho)}
+
+
+def sharpe_difference_bootstrap(r1: pd.Series, r2: pd.Series, rf: pd.Series, *,
+                                block: int, n_boot: int, seed: int, level: float = 0.95,
+                                periods_per_year: int = 12) -> dict[str, float]:
+    """Paired circular block bootstrap test of H0: SR1 = SR2.
+
+    Each bootstrap sample draws the *same* blocks of consecutive months for both
+    strategies, which keeps their cross-dependence and short-run autocorrelation
+    (in the spirit of Ledoit & Wolf 2008). The p-value compares |Δ* − Δ̂| with |Δ̂|,
+    i.e. the bootstrap distribution re-centred under H0.
+
+    Parameters
+    ----------
+    r1, r2 : returns of the two strategies over the same periods.
+    rf : risk-free returns for those periods.
+    block : block length in periods.
+    n_boot : number of bootstrap samples.
+    seed : random seed.
+    level : confidence level of the percentile interval for the difference.
+    periods_per_year : q, to annualize.
+
+    Returns
+    -------
+    dict with ``diff`` (annualized SR1 − SR2), ``ci_lo``, ``ci_hi``, ``p_value``.
+
+    Theorem: none (statistical test).
+    """
+    e = np.column_stack([(r1 - rf.reindex(r1.index)).values,
+                         (r2 - rf.reindex(r2.index)).values])
+    T = len(e)
+    rng = np.random.default_rng(seed)
+    n_blocks = int(np.ceil(T / block))
+    starts = rng.integers(0, T, size=(n_boot, n_blocks))
+    idx = ((starts[:, :, None] + np.arange(block)) % T).reshape(n_boot, -1)[:, :T]
+    sample = e[idx]                                           # (n_boot, T, 2)
+    sr = sample.mean(axis=1) / sample.std(axis=1, ddof=1)
+    k = np.sqrt(periods_per_year)
+    d_boot = k * (sr[:, 0] - sr[:, 1])
+    d_hat = k * (e[:, 0].mean() / e[:, 0].std(ddof=1) - e[:, 1].mean() / e[:, 1].std(ddof=1))
+    lo, hi = np.quantile(d_boot, [0.5 - level / 2, 0.5 + level / 2])
+    p = float(np.mean(np.abs(d_boot - d_hat) >= abs(d_hat)))
+    return {"diff": float(d_hat), "ci_lo": float(lo), "ci_hi": float(hi), "p_value": p}
+
+
+def holm_adjust(p_values: list[float] | np.ndarray) -> np.ndarray:
+    """Holm (1979) step-down adjustment for a family of tests.
+
+    Controls the probability of any false rejection in the family at level α without
+    assuming the tests are independent (they are not: the strategies are correlated).
+
+    Parameters
+    ----------
+    p_values : raw p-values of the family.
+
+    Returns
+    -------
+    Adjusted p-values, same order; reject when adjusted p < α.
+
+    Theorem: none (multiple-testing correction).
+    """
+    p = np.asarray(p_values, dtype=float)
+    m = len(p)
+    order = np.argsort(p)
+    adj = np.empty(m)
+    running = 0.0
+    for rank, i in enumerate(order):
+        running = max(running, min(1.0, (m - rank) * p[i]))
+        adj[i] = running
+    return adj
