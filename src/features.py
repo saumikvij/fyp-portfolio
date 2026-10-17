@@ -30,6 +30,15 @@ import pandas as pd
 FEATURES = ["rev_1m", "mom_3m", "mom_6m", "mom_12_1", "vol_1m", "vol_3m", "beta_1y",
             "idio_vol_3m", "max_ret_1m", "dist_52w", "volume_trend", "rsi", "max_dd_1y"]
 
+# Extra price-based signals for the model search (DECISIONS MS2):
+#   rev_1w           return over the last 5 trading days
+#   skew_3m          skewness of daily returns, last 63 trading days
+#   amihud_3m        Amihud illiquidity: mean |daily return| / dollar volume, last 63 days
+#   mom_sector_rel   mom_12_1 minus the average mom_12_1 of the stock's sector that month
+#   vol_ratio        vol_1m / vol_3m (is volatility rising or falling?)
+EXTRA_FEATURES = ["rev_1w", "skew_3m", "amihud_3m", "mom_sector_rel", "vol_ratio"]
+FEATURE_SETS = {"base": FEATURES, "extended": FEATURES + EXTRA_FEATURES}
+
 
 def _max_drawdown_columns(prices: np.ndarray) -> np.ndarray:
     """Max drawdown of each column of a price window (rows = days)."""
@@ -101,8 +110,41 @@ def features_at(prices: pd.DataFrame, volume: pd.DataFrame, prices_monthly: pd.D
     return out
 
 
+def extra_features_at(prices: pd.DataFrame, volume: pd.DataFrame, close: pd.DataFrame,
+                      stocks: list[str], windows: dict) -> pd.DataFrame:
+    """Extra signals (``EXTRA_FEATURES`` except the sector-relative one) at one date.
+
+    Parameters
+    ----------
+    prices : daily adjusted prices up to and including t.
+    volume : daily share volume up to t.
+    close : daily unadjusted close up to t (for dollar volume).
+    stocks : stock columns.
+    windows : trading-day windows {"w1": 5, "m1": 21, "m3": 63, ...}.
+
+    Returns
+    -------
+    DataFrame (stock x rev_1w, skew_3m, amihud_3m, vol_ratio); NaN if history is short.
+
+    Theorem: none (DECISIONS MS2).
+    """
+    w1, m1, m3 = windows["w1"], windows["m1"], windows["m3"]
+    out = pd.DataFrame(index=stocks, columns=["rev_1w", "skew_3m", "amihud_3m", "vol_ratio"],
+                       dtype=float)
+    if len(prices) <= m3:
+        return out
+    p = prices[stocks]
+    r = p.pct_change(fill_method=None)
+    out["rev_1w"] = p.iloc[-1] / p.iloc[-1 - w1] - 1
+    out["skew_3m"] = r.iloc[-m3:].skew()
+    dollar_vol = (close[stocks] * volume[stocks]).iloc[-m3:]
+    out["amihud_3m"] = (r.iloc[-m3:].abs() / dollar_vol.where(dollar_vol > 0)).mean() * 1e9
+    out["vol_ratio"] = r.iloc[-m1:].std() / r.iloc[-m3:].std()
+    return out
+
+
 def build_feature_panel(data: dict, stocks: list[str], bench: str, windows: dict,
-                        rsi_days: int) -> pd.DataFrame:
+                        rsi_days: int, feature_set: str = "base") -> pd.DataFrame:
     """Raw features at every month-end, each computed from data sliced to that date.
 
     Parameters
@@ -111,19 +153,29 @@ def build_feature_panel(data: dict, stocks: list[str], bench: str, windows: dict
     stocks : the universe.
     bench : benchmark column.
     windows, rsi_days : feature windows (config ``ml``).
+    feature_set : "base" (the 13 ``FEATURES``) or "extended" (plus ``EXTRA_FEATURES``).
 
     Returns
     -------
-    DataFrame indexed by (date, ticker) with the ``FEATURES`` columns; dates with any
-    missing feature (the first year) are dropped.
+    DataFrame indexed by (date, ticker) with the columns of ``FEATURE_SETS[feature_set]``;
+    dates with any missing feature (the first year) are dropped.
 
     Theorem: none (plan Section 4.1; no look-ahead by construction, tested).
     """
     prices, volume, pm = data["prices"], data["volume"], data["prices_monthly"]
+    extended = feature_set == "extended"
+    if feature_set not in FEATURE_SETS:
+        raise ValueError(f"Unknown feature set {feature_set!r}")
+    sectors = data["sectors"]["sector"].reindex(stocks) if extended else None
     frames = {}
     for t in pm.index:
         f = features_at(prices.loc[:t], volume.loc[:t], pm.loc[:t], bench, stocks,
                         windows, rsi_days)
+        if extended:
+            f = f.join(extra_features_at(prices.loc[:t], volume.loc[:t], data["close"].loc[:t],
+                                         stocks, windows))
+            f["mom_sector_rel"] = f["mom_12_1"] - f["mom_12_1"].groupby(sectors).transform("mean")
+            f = f[FEATURE_SETS["extended"]]
         if not f.isna().any().any():
             frames[t] = f
     panel = pd.concat(frames, names=["date", "ticker"])

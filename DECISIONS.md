@@ -389,3 +389,22 @@ Unchanged and already documented: survivorship bias (D0.2, approved A1), current
 - **Reported:** the same forecast metrics (R²_oos, rank IC with Newey–West t, quintile spread) and portfolio metrics (annualized ×52), S1, S4, S5, S6 side by side with the monthly results.
 - **Status:** a robustness experiment. **The monthly results stay the main results whatever the weekly ones show**, and the weekly ones are reported in full either way.
 
+## Model search (designed 17 Oct 2026, before any search result)
+
+### MS1 Purpose and rule against overfitting
+- **Goal (student's request):** try different model families, settings and extra price-based signals, and find the setup per model that forecasts best, then feed the best **three** models into Black–Litterman. The original Phase 3–4 results stay as they are (they were pre-specified); this is an additional study.
+- **Same forecasting method as before:** walk-forward. At each month-end the model is trained only on data available then and forecasts the next month (D3.5), retrained yearly with chronological validation.
+- **Development vs holdout:** setups are compared **only on forecasts made Dec 2015 – Dec 2021** (73 months, the development period). Forecasts made Jan 2022 – Jul 2026 (55 months, the holdout) are **not used for any choice**; they are evaluated once, for the three finalists only. Every setup tried is logged, not just the winners.
+- **Caveat:** the original headline's 2022–2026 results were seen before this search; the search procedure itself does not use those years.
+
+### MS2 What is varied (one grid, fixed in config before running)
+- **Model families (4):** elastic net, LightGBM, MLP (as in Phase 3) and random forest (new: averaging many deep trees, a common strong baseline for tabular data).
+- **Training window (3):** expanding (as now), rolling 6 years, rolling 4 years (advisor's suggestion: older data may mislead). 4 years is the shortest that still leaves 24 tuning + 24 validation months.
+- **Target (2):** raw next-month excess return (as now), or excess return minus that month's cross-sectional average (learn which stocks beat the others, which removes the market's ups and downs from the target). For Black–Litterman the relative forecast is turned back into a return level by adding the average past excess return of the universe (known at t).
+- **Signals (2):** the 13 Phase 3 features, or those plus 5 extra price-based ones: last-week return, 3-month return skewness, 3-month illiquidity (Amihud: |return| / dollar volume), 12–1 momentum relative to the stock's sector, and short- vs long-term volatility ratio.
+- 4 × 3 × 2 × 2 = **48 setups**. Inside each, hyperparameters are still tuned by the chronological validation (D3.5).
+
+### MS3 Selection rule (fixed in advance)
+- Score = mean monthly rank IC of the forecasts over the development period. Ranking is what Black–Litterman and the optimizer can use, and IC is less noisy than portfolio returns.
+- Finalists: the best setup of each model family, then the **three families with the highest development score**.
+- Then, for the three finalists only: holdout forecast metrics, and S6 (Black–Litterman, Ω-A, τ = 0.05, γ = 5) with Sharpe, turnover and drawdown reported separately for development and holdout, next to the original headline S6, the prior alone, S4 and 1/N.

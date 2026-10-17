@@ -26,6 +26,7 @@ from itertools import product
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import ElasticNet
 from sklearn.neural_network import MLPRegressor
 
@@ -73,6 +74,7 @@ class ElasticNetModel:
     seed: int
     retrain_every: int = 12
     name: str = "Elastic net"
+    features: list[str] = field(default_factory=lambda: list(FEATURES))
     tuned: bool = True
     params_: dict = field(default_factory=dict)
 
@@ -84,24 +86,24 @@ class ElasticNetModel:
         """Grid search on (α, l1_ratio) by validation MSE; returns the best setting."""
         best = None
         for a, l1 in product(self.alphas, self.l1_ratios):
-            m = self._make(a, l1).fit(tune_set[FEATURES].values, tune_set["target"].values)
-            mse = _mse(m.predict(val_set[FEATURES].values), val_set["target"].values)
+            m = self._make(a, l1).fit(tune_set[self.features].values, tune_set["target"].values)
+            mse = _mse(m.predict(val_set[self.features].values), val_set["target"].values)
             if best is None or mse < best["val_mse"]:
                 best = {"alpha": a, "l1_ratio": l1, "val_mse": mse}
         return best
 
     def fit(self, train: pd.DataFrame) -> None:
         self.model_ = self._make(self.params_["alpha"], self.params_["l1_ratio"])
-        self.model_.fit(train[FEATURES].values, train["target"].values)
+        self.model_.fit(train[self.features].values, train["target"].values)
 
     def predict_array(self, X: np.ndarray) -> np.ndarray:
         return self.model_.predict(X)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        return self.predict_array(X[FEATURES].values)
+        return self.predict_array(X[self.features].values)
 
     def coefficients(self) -> dict:
-        return dict(zip(FEATURES, self.model_.coef_))
+        return dict(zip(self.features, self.model_.coef_))
 
     def clone(self, seed: int) -> "ElasticNetModel":
         c = copy.deepcopy(self)
@@ -130,6 +132,7 @@ class LightGBMModel:
     seed: int
     retrain_every: int = 12
     name: str = "LightGBM"
+    features: list[str] = field(default_factory=lambda: list(FEATURES))
     tuned: bool = True
     params_: dict = field(default_factory=dict)
 
@@ -143,8 +146,8 @@ class LightGBMModel:
 
     def tune(self, tune_set: pd.DataFrame, val_set: pd.DataFrame) -> dict:
         """Grid search; early stopping on the validation months picks the tree count."""
-        Xt, yt = tune_set[FEATURES].values, tune_set["target"].values
-        Xv, yv = val_set[FEATURES].values, val_set["target"].values
+        Xt, yt = tune_set[self.features].values, tune_set["target"].values
+        Xv, yv = val_set[self.features].values, val_set["target"].values
         best = None
         for nl, mcs in product(self.num_leaves, self.min_child_samples):
             m = self._make(nl, mcs, self.max_trees)
@@ -160,13 +163,13 @@ class LightGBMModel:
     def fit(self, train: pd.DataFrame) -> None:
         p = self.params_
         self.model_ = self._make(p["num_leaves"], p["min_child_samples"], p["n_trees"])
-        self.model_.fit(train[FEATURES].values, train["target"].values)
+        self.model_.fit(train[self.features].values, train["target"].values)
 
     def predict_array(self, X: np.ndarray) -> np.ndarray:
         return self.model_.predict(X)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        return self.predict_array(X[FEATURES].values)
+        return self.predict_array(X[self.features].values)
 
     def clone(self, seed: int) -> "LightGBMModel":
         c = copy.deepcopy(self)
@@ -193,6 +196,7 @@ class MLPModel:
     seed: int
     retrain_every: int = 12
     name: str = "MLP"
+    features: list[str] = field(default_factory=lambda: list(FEATURES))
     tuned: bool = True
     params_: dict = field(default_factory=dict)
 
@@ -204,7 +208,7 @@ class MLPModel:
 
     def tune(self, tune_set: pd.DataFrame, val_set: pd.DataFrame) -> dict:
         """Grid over (layers, α); epochs chosen by chronological early stopping."""
-        Xt, Xv = tune_set[FEATURES].values, val_set[FEATURES].values
+        Xt, Xv = tune_set[self.features].values, val_set[self.features].values
         scale = float(tune_set["target"].std())
         yt, yv = tune_set["target"].values / scale, val_set["target"].values
         best = None
@@ -229,7 +233,7 @@ class MLPModel:
         p = self.params_
         self.scale_ = float(train["target"].std())
         self.model_ = self._make(tuple(p["hidden"]), p["alpha"], len(train))
-        X, y = train[FEATURES].values, train["target"].values / self.scale_
+        X, y = train[self.features].values, train["target"].values / self.scale_
         for _ in range(p["epochs"]):
             self.model_.partial_fit(X, y)
 
@@ -237,9 +241,62 @@ class MLPModel:
         return self.model_.predict(X) * self.scale_
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        return self.predict_array(X[FEATURES].values)
+        return self.predict_array(X[self.features].values)
 
     def clone(self, seed: int) -> "MLPModel":
+        c = copy.deepcopy(self)
+        c.seed = seed
+        return c
+
+
+@dataclass
+class RandomForestModel:
+    """Random forest (scikit-learn): many deep trees on bootstrap samples, averaged.
+
+    Grid over ``max_depth`` x ``min_samples_leaf`` chosen by validation MSE on the
+    chronological validation months; ``max_features`` fixed. Added for the model search
+    (DECISIONS MS2).
+    """
+
+    n_estimators: int
+    max_depth: list[int]
+    min_samples_leaf: list[int]
+    max_features: float
+    seed: int
+    retrain_every: int = 12
+    name: str = "Random forest"
+    features: list[str] = field(default_factory=lambda: list(FEATURES))
+    tuned: bool = True
+    params_: dict = field(default_factory=dict)
+
+    def _make(self, depth: int, leaf: int) -> RandomForestRegressor:
+        return RandomForestRegressor(n_estimators=self.n_estimators, max_depth=depth,
+                                     min_samples_leaf=leaf, max_features=self.max_features,
+                                     random_state=self.seed, n_jobs=-1)
+
+    def tune(self, tune_set: pd.DataFrame, val_set: pd.DataFrame) -> dict:
+        """Grid search on (max_depth, min_samples_leaf) by validation MSE."""
+        best = None
+        for depth, leaf in product(self.max_depth, self.min_samples_leaf):
+            m = self._make(depth, leaf).fit(tune_set[self.features].values,
+                                            tune_set["target"].values)
+            mse = _mse(m.predict(val_set[self.features].values), val_set["target"].values)
+            if best is None or mse < best["val_mse"]:
+                best = {"max_depth": depth, "min_samples_leaf": leaf, "val_mse": mse}
+        return best
+
+    def fit(self, train: pd.DataFrame) -> None:
+        p = self.params_
+        self.model_ = self._make(p["max_depth"], p["min_samples_leaf"])
+        self.model_.fit(train[self.features].values, train["target"].values)
+
+    def predict_array(self, X: np.ndarray) -> np.ndarray:
+        return self.model_.predict(X)
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        return self.predict_array(X[self.features].values)
+
+    def clone(self, seed: int) -> "RandomForestModel":
         c = copy.deepcopy(self)
         c.seed = seed
         return c
@@ -266,7 +323,8 @@ def _bootstrap_months(avail: pd.DataFrame, rng: np.random.Generator) -> pd.DataF
 
 def walk_forward(model, panel: pd.DataFrame, forecast_dates: pd.DatetimeIndex,
                  val_months: int, min_train_months: int, n_copies: int = 0,
-                 seed: int = 0) -> WalkForwardResult:
+                 seed: int = 0, train_window_months: int | None = None,
+                 target_mode: str = "raw") -> WalkForwardResult:
     """Run the chronological train / validate / forecast loop described above.
 
     Parameters
@@ -280,6 +338,12 @@ def walk_forward(model, panel: pd.DataFrame, forecast_dates: pd.DatetimeIndex,
     min_train_months : minimum feature months in the tuning set.
     n_copies : number of bootstrap copies for Ω-B (0 = none).
     seed : base seed for the copies (copy k uses seed + k + 1).
+    train_window_months : None = expanding window; otherwise only the most recent
+        this many available feature months are used (rolling window, MS2).
+    target_mode : "raw" = learn next-month excess returns; "demeaned" = learn excess
+        returns minus each month's cross-sectional average (which stocks beat the
+        others). Demeaned forecasts are returned as levels by adding ``level`` = the
+        average realized excess return in the training window (known at t).
 
     Returns
     -------
@@ -306,8 +370,19 @@ def walk_forward(model, panel: pd.DataFrame, forecast_dates: pd.DatetimeIndex,
         if due:
             avail = panel[(panel["target_date"] <= t) & panel["target"].notna()]
             months = avail.index.get_level_values("date").unique().sort_values()
+            if train_window_months is not None:
+                months = months[-train_window_months:]
+                avail = avail[avail.index.get_level_values("date").isin(months)]
+            level = 0.0
+            if target_mode == "demeaned":
+                level = float(avail["target"].mean())
+                avail = avail.copy()
+                avail["target"] -= avail.groupby(level="date")["target"].transform("mean")
+            elif target_mode != "raw":
+                raise ValueError(f"Unknown target_mode {target_mode!r}")
             row = {"retrain_date": t, "train_start": months[0], "train_end": months[-1],
-                   "last_target_date": avail["target_date"].max(), "n_rows": len(avail)}
+                   "last_target_date": avail["target_date"].max(), "n_rows": len(avail),
+                   "level": level}
             if model.tuned:
                 val_m, tune_m = months[-val_months:], months[:-val_months]
                 if len(tune_m) < min_train_months:
@@ -332,7 +407,7 @@ def walk_forward(model, panel: pd.DataFrame, forecast_dates: pd.DatetimeIndex,
             last_retrain = t
         X_t = panel[dates == t]
         tickers = X_t.index.get_level_values("ticker")
-        forecasts[t] = pd.Series(model.predict(X_t), index=tickers)
+        forecasts[t] = pd.Series(model.predict(X_t) + level, index=tickers)
         if n_copies:
             preds = np.vstack([c.predict(X_t) for c in copies])
             ens_var[t] = pd.Series(preds.var(axis=0, ddof=1), index=tickers)

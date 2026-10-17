@@ -48,6 +48,7 @@ phase2:                        # baseline backtest outputs (S1-S4)
 
 ml:                            # Phase 3 forecasting (plan Section 4)
   windows:                     # trading-day windows for daily features
+    w1: 5                      # extended set only (model search)
     m1: 21
     m3: 63
     y1: 252
@@ -80,6 +81,20 @@ ml:                            # Phase 3 forecasting (plan Section 4)
     n_copies: 10               # Ω-B: copies trained on bootstrap samples of months
   quantiles: 5                 # quintile spread (51 stocks: ~10 per group)
   permutation_repeats: 20
+
+model_search:                  # MS1–MS3 in DECISIONS.md (fixed before running)
+  dev_end: "2021-12-31"        # setups compared only on forecasts made up to here
+  families: [Elastic net, LightGBM, MLP, Random forest]
+  train_windows: [null, 72, 48]    # months; null = expanding
+  targets: [raw, demeaned]
+  feature_sets: [base, extended]
+  n_finalists: 3
+  random_forest:
+    n_estimators: 300
+    max_depth: [4, 8]
+    min_samples_leaf: [50, 200]
+    max_features: 0.5
+  out_dir: data/ml/search      # forecasts of every setup (git-ignored)
 
 phase3:
   table_dir: report/tables

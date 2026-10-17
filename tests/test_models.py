@@ -5,11 +5,12 @@ import pandas as pd
 import pytest
 
 from src.data import load_config
-from src.features import FEATURES, add_targets, build_feature_panel, rank_normalize
+from src.features import (FEATURE_SETS, FEATURES, add_targets, build_feature_panel,
+                          rank_normalize)
 from src.ml_eval import (hit_rate, newey_west_se, quantile_spread, r2_oos, rank_ic,
                          summarize_series)
 from src.models import (ElasticNetModel, HistoricalMeanModel, LightGBMModel, MLPModel,
-                        walk_forward)
+                        RandomForestModel, walk_forward)
 from tests.pit import perturb_after
 from tests.toy import make_toy_data
 
@@ -248,3 +249,72 @@ def test_newey_west():
     assert newey_west_se(ar) > ar.std(ddof=1) / np.sqrt(len(ar)) * 1.3
     s = summarize_series(ar + 0.5)
     assert abs(s["t_stat_nw"]) < abs(s["t_stat"])
+
+
+# --------------------------------------------------------------------------- model search options
+
+
+def rforest():
+    return RandomForestModel(60, [4], [20], 0.5, CFG["seed"])
+
+
+@pytest.mark.parametrize("window", [8, 14])
+def test_rolling_window_uses_only_recent_months(panel, dates, window):
+    m = HistoricalMeanModel()
+    m.tuned, m.retrain_every = False, 12
+    log = walk_forward(m, panel, dates, VAL, MIN_TRAIN, train_window_months=window).log
+    for _, row in log.iterrows():
+        months = pd.period_range(row["train_start"], row["train_end"], freq="M")
+        assert len(months) <= window
+        assert row["last_target_date"] <= row["retrain_date"]
+
+
+def test_rolling_window_with_tuning_and_leakage(panel, dates):
+    log = walk_forward(enet(), panel, dates, VAL, MIN_TRAIN, train_window_months=14).log
+    assert (log["last_target_date"] <= log["retrain_date"]).all()
+    assert (log["tune_end"] < log["val_start"]).all() and (log["val_end"] < log["retrain_date"]).all()
+
+
+def test_demeaned_target_level_is_past_average(panel, dates):
+    res = walk_forward(enet(), panel, dates, VAL, MIN_TRAIN, target_mode="demeaned")
+    for _, row in res.log.iterrows():
+        realized = panel[(panel["target_date"] <= row["retrain_date"]) & panel["target"].notna()]
+        assert row["level"] == pytest.approx(realized["target"].mean())
+
+
+@pytest.mark.parametrize("mode", ["raw", "demeaned"])
+@pytest.mark.parametrize("window", [None, 14])
+def test_search_options_unchanged_by_future_data(toy, dates, mode, window):
+    t = dates[len(dates) // 2]
+    moved = {k: (perturb_after(v, t) if k not in ("sectors", "shares_outstanding") else v)
+             for k, v in toy.items()}
+    a = walk_forward(enet(), toy_panel(toy), dates, VAL, MIN_TRAIN, train_window_months=window,
+                     target_mode=mode).forecasts
+    b = walk_forward(enet(), toy_panel(moved), dates, VAL, MIN_TRAIN, train_window_months=window,
+                     target_mode=mode).forecasts
+    pd.testing.assert_frame_equal(a.loc[:t], b.loc[:t])
+
+
+def test_random_forest_finds_nonlinear_signal_and_has_no_leakage(panel, dates):
+    X, fdates = planted_panel(lambda d: 0.08 * (d["vol_1m"].abs() - 0.25))
+    realized = X.loc[fdates, "target"].unstack()
+    assert rank_ic(walk_forward(rforest(), X, fdates, 12, 12).forecasts, realized).mean() > 0.3
+    log = walk_forward(rforest(), panel, dates, VAL, MIN_TRAIN).log
+    assert (log["last_target_date"] <= log["retrain_date"]).all()
+
+
+def test_extended_features_point_in_time(toy):
+    stocks = [c for c in toy["prices"].columns if c != "SPY"]
+    t = toy["prices_monthly"].index[24]
+    moved = {k: (perturb_after(v, t) if k not in ("sectors", "shares_outstanding") else v)
+             for k, v in toy.items()}
+    a = build_feature_panel(toy, stocks, "SPY", W, RSI, "extended")
+    b = build_feature_panel(moved, stocks, "SPY", W, RSI, "extended")
+    da, db = a.index.get_level_values("date"), b.index.get_level_values("date")
+    pd.testing.assert_frame_equal(a[da <= t], b[db <= t])
+    assert list(a.columns) == FEATURE_SETS["extended"]
+    # Sector-relative momentum averages to zero within each sector and month.
+    sec = toy["sectors"]["sector"]
+    g = a["mom_sector_rel"].groupby([a.index.get_level_values("date"),
+                                     sec.reindex(a.index.get_level_values("ticker")).values])
+    np.testing.assert_allclose(g.mean().values, 0, atol=1e-12)
