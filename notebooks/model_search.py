@@ -99,8 +99,10 @@ def build_model(family: str, cfg: dict, features: list[str]):
                         features=features)
     if family == "Random forest":
         r = cfg["model_search"]["random_forest"]
-        return RandomForestModel(r["n_estimators"], r["max_depth"], r["min_samples_leaf"],
-                                 r["max_features"], seed, retrain_every=every, features=features)
+        m = RandomForestModel(r["n_estimators"], r["max_depth"], r["min_samples_leaf"],
+                              r["max_features"], seed, retrain_every=every, features=features)
+        m.max_samples = r.get("max_samples")
+        return m
     if family == "Huber":
         h = cfg["model_search"]["huber"]
         return GridModel("Huber", lambda epsilon, alpha, seed: HuberRegressor(
@@ -111,7 +113,9 @@ def build_model(family: str, cfg: dict, features: list[str]):
         return GridModel("Extra trees", lambda max_depth, min_samples_leaf, seed:
                          ExtraTreesRegressor(n_estimators=x["n_estimators"], max_depth=max_depth,
                                              min_samples_leaf=min_samples_leaf,
-                                             max_features=x["max_features"], random_state=seed,
+                                             max_features=x["max_features"],
+                                             bootstrap=x.get("max_samples") is not None,
+                                             max_samples=x.get("max_samples"), random_state=seed,
                                              n_jobs=-1),
                          {"max_depth": x["max_depth"], "min_samples_leaf": x["min_samples_leaf"]},
                          seed, every, features)

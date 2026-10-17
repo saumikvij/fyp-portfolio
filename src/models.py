@@ -265,6 +265,7 @@ class RandomForestModel:
     seed: int
     retrain_every: int = 12
     name: str = "Random forest"
+    max_samples: float | None = None      # row subsample per tree (wide universe, WU1)
     features: list[str] = field(default_factory=lambda: list(FEATURES))
     tuned: bool = True
     params_: dict = field(default_factory=dict)
@@ -272,7 +273,8 @@ class RandomForestModel:
     def _make(self, depth: int, leaf: int) -> RandomForestRegressor:
         return RandomForestRegressor(n_estimators=self.n_estimators, max_depth=depth,
                                      min_samples_leaf=leaf, max_features=self.max_features,
-                                     random_state=self.seed, n_jobs=-1)
+                                     max_samples=self.max_samples, random_state=self.seed,
+                                     n_jobs=-1)
 
     def tune(self, tune_set: pd.DataFrame, val_set: pd.DataFrame) -> dict:
         """Grid search on (max_depth, min_samples_leaf) by validation MSE."""

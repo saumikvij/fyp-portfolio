@@ -148,6 +148,16 @@ model_search:                  # MS1–MS3 in DECISIONS.md (fixed before running
       Hist gradient boosting: {max_depth: [2, 3, 5], learning_rate: [0.01, 0.05, 0.1],
                                min_samples_leaf: [50, 200]}
       Kernel ridge: {gamma: [0.03, 0.1, 0.3, 1.0, 3.0], alpha: [0.1, 1.0, 10.0, 100.0]}
+  wide:                        # WU1: ~1,050-stock universe (forecasting test)
+    windows: [null]
+    targets: [raw, demeaned]
+    feature_sets: [base, niche]
+    overrides:                 # lighter settings for 30x more rows
+      random_forest: {n_estimators: 100, max_samples: 0.3}
+      extra_trees: {n_estimators: 100, max_samples: 0.3}
+      knn: {n_neighbors: [200, 1000]}
+      quantile_regression: {alpha: [0.0]}
+    out_dir: data/ml/search_wide
   out_dir: data/ml/search      # forecasts of every setup (git-ignored)
 
 phase3:
