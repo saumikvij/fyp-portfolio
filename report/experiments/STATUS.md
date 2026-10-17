@@ -8,11 +8,8 @@ Design and every decision: DECISIONS.md, sections MS1–MS10 and WU1.
   (best IC 0.046 real vs 0.041 placebo; 5% vs 20% pass the 3-block rule).
 - Wide universe built: 1,052 stocks with full 2010–2026 data in `data/wide/processed`.
 
-## Running / to resume (both skip finished setups, so just re-run)
-- Round 4 (wider grids, 6-month retraining, risk signal set, families 14–15):
-  `python -m notebooks.model_search`
-- Wide-universe search (60 setups on ~1,050 stocks):
-  `python -m notebooks.wide_search`
+- Round 4 done: 780 setups in total on the 51 stocks; finalists kernel ridge, KNN, LightGBM (risk signal set).
+- Wide universe done: 60 setups + 36 placebo (see DECISIONS MS11).
 
 ## Not done yet (in this order)
 1. Weekly test (E1), planned for 18 Oct.

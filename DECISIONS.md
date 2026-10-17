@@ -465,3 +465,10 @@ Unchanged and already documented: survivorship bias (D0.2, approved A1), current
 
 ### WU3 Quantile regression on the wide universe uses a 25,000-row subsample (18 Oct)
 - Its exact solver (an LP over every row) did not finish one setup in 27 minutes on ~200,000 rows. On the wide universe only, each training set is randomly subsampled to 25,000 rows (seeded) before fitting; prediction is unchanged. The 51-stock search is unaffected (never more than ~9,600 rows).
+
+### MS11 Results of the full development search (18 Oct; holdout still unused)
+- **51 stocks, 780 setups (rounds 1–4):** 84 passed the 3-block rule (11%; placebo 20%). Best development IC 0.058 vs placebo best 0.041.
+- **Round 4's "risk" signal set produced the only setups clearly above the placebo:** kernel ridge 0.058, KNN 0.054, LightGBM 0.053, each positive in all three blocks (lowest block 0.028–0.050). 30% of risk-set setups passed vs 20% in the placebo. **Caveat (MS8):** the risk set was chosen from development-period single-signal results, so these development scores are optimistic; only the holdout can confirm them.
+- **Finalists by the pre-set rule (MS3 + MS5):** kernel ridge (rolling 4y, raw, risk set), KNN (rolling 4y, demeaned, risk set), LightGBM (rolling 4y, demeaned, risk set), all retrained yearly with the wide grids.
+- **Wide universe (60 setups, 1,052 stocks):** no setup reaches t > 2 (best 1.56). But the *typical* setup does better than the placebo: median IC 0.006 vs −0.001 overall, and 0.019 vs 0.001 for mid caps, so a small, broad signal in mid/small caps is likely, while no single setup is clearly reliable. The placebo's best t is 2.15, showing that one t > 2 among many tries is expected by luck.
+- **Next (student to decide):** weekly experiment (E1), then the single holdout run of the three finalists (`--stage final`), then the 2008 stress test (MS10).
