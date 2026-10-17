@@ -261,7 +261,7 @@ def main() -> None:
                 fontsize=8.5, color=INK)
     ax.axhline(0, color=MUTED, lw=1)
     ax.set_ylim(lo, hi + 0.3 * (hi - lo))
-    ax.text(0.99, 0.98, "Flat stretches: years in which a model's validation chose no signal,\n"
+    ax.text(0.99, 0.98, "Flat stretches (elastic net): years in which validation set every coefficient to zero,\n"
             "so every stock got the same forecast (IC undefined, counted as 0)",
             transform=ax.transAxes, ha="right", va="top", fontsize=7.5, color=INK_2)
     ax.set_ylabel("Cumulative monthly rank IC", color=INK_2)

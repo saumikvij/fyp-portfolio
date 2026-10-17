@@ -210,7 +210,7 @@ At each forecast date t (Dec 2015 – Jul 2026, 128 month-ends):
 ### D3.10 S5 definition
 - Mean-variance with μ = elastic-net forecasts, the same Σ and constraints as S4 (long-only, 10% cap), all three γ levels.
 
-### D3.11 Findings (step 1): no reliable signal in this universe
+### D3.11 Findings (step 1): no reliable predictive benefit detected under the tested conditions
 - **Forecast accuracy:** R²_oos against zero is 2.01% (elastic net) vs 1.72% (historical mean). Most of both comes from predicting a positive average return (mean² / variance of the target ≈ 2.7%), not from telling stocks apart. Against the historical mean the elastic net improves R²_oos by only 0.30%.
 - **Ranking stocks:** the elastic net's rank IC is −0.013 (t = −0.48), the historical mean's +0.018 (t = 0.80); the difference has t = −1.44. Quintile spread: elastic net −0.14% a month (t = −0.26), historical mean +0.40% (t = 0.81). Hit rate 56.5% for both, equal to the base rate. Neither model ranks stocks better than chance.
 - **The model often switches itself off:** in 4 of 11 retrains (Dec 2016, 2017, 2020, 2021) validation chose α large enough to zero every coefficient, so every stock got the same forecast (48 of 128 months). The procedure is doing its job: in those years no feature helped on validation data.
@@ -240,7 +240,7 @@ At each forecast date t (Dec 2015 – Jul 2026, 128 month-ends):
 - For each model and retrain, 10 extra copies are fitted on bootstrap samples of whole months (keeps each month's cross-section), each with its own seed. Ω-B for stock i at t = variance of the 10 copies' forecasts. The main forecast stays the single tuned model; the copies only measure disagreement. Saved to `data/ml/omega_b_<model>.parquet` for Phase 4.
 
 ### D3.15 Findings: nonlinearity does not help, in forecasts or portfolios
-- **Validation kept the models very simple:** LightGBM chose 1–136 trees (of 2,000 allowed); the MLP chose 1–27 epochs, mostly ≤ 8; the elastic net zeroed every coefficient in 4 of 11 years. All three are telling us the same thing: little stable signal.
+- **Validation kept the models very simple:** LightGBM chose 1–136 trees (of 2,000 allowed); the MLP chose 1–27 epochs, mostly ≤ 8; the elastic net zeroed every coefficient in 4 of 11 years. All three point the same way: no reliable predictive benefit was detected under the tested conditions (these 13 features, these 51 stocks, 2016–2026).
 - **Forecasts (Dec 2015 – Jul 2026):**
 
 | | R²_oos vs 0 | vs hist. mean | Rank IC (NW t) | Quintile spread/month (NW t) | Hit rate |
@@ -313,14 +313,79 @@ Unchanged and already documented: survivorship bias (D0.2, approved A1), current
 - **BL makes ML portfolios far more stable.** Headline turnover 30% a month against 72% for S5 (difference −41.5 points, NW t = −5.3). With Ω-A the reduction holds for every model: LightGBM 83% → 32% (t = −9.0), MLP 125% → 52% (t = −20.2). Calibrated Ω-B gives similar reductions (t = −5.6 to −20.7).
 - **Raw Ω-B does not stabilize anything:** turnover is unchanged (difference −3 to +3 points) because the views are treated as almost certain (μ_BL moves 92–99% of the way to the views).
 - **Returns:** headline Sharpe 0.876 against 0.693 (S5), 0.876 (S4), 0.957 (1/N), 0.963 (prior only). After Holm correction no Sharpe difference in the family of 28 is significant (smallest adjusted p = 0.13). Before correction, BL improves the MLP portfolio (S6 Ω-A vs S5: +0.34, p = 0.011; Ω-B-cal: +0.36, p = 0.004), which does not survive the correction.
-- **The views do not add value over the prior:** headline vs prior only −0.09 (p = 0.23). This is consistent with Phase 3: with no forecasting signal, the best BL can do is stay near the market prior, and it does better the closer it stays (D4.9).
+- **The views do not add value over the prior:** headline vs prior only −0.09 (p = 0.23). This is consistent with Phase 3: where no reliable predictive benefit was detected, the best BL can do is stay near the market prior, and it does better the closer it stays (D4.9).
 - **Tail risk and drawdowns** of S6 (monthly CVaR 7.6%, daily drawdown 31.5%) are in the same range as the other strategies; no strategy is clearly worse in the tail.
 
 ### D4.9 Ablations (around the headline)
-- **τ:** Sharpe falls and turnover rises steadily as τ grows (τ = 0.01: 0.94 and 19%; 0.25: 0.79 and 52%). **Ω scale:** ×4 gives 0.94 and 19%, ×0.25 gives 0.81 and 49%. Both say the same: the less weight on the views, the better, as expected when the views have no skill.
+- **τ:** Sharpe falls and turnover rises steadily as τ grows (τ = 0.01: 0.94 and 19%; 0.25: 0.79 and 52%). **Ω scale:** ×4 gives 0.94 and 19%, ×0.25 gives 0.81 and 49%. Both say the same: the less weight on the views, the better, as expected when the views show no reliable predictive benefit.
 - **γ:** S6 beats S5 at every γ (γ = 10: 0.85 vs 0.69; γ = 2: 1.00 vs 0.76). γ = 2 has the highest Sharpe of any strategy (1.00), but it is one of many ablations, not a pre-specified hypothesis, so it is not presented as a finding.
 - **Costs:** the BL advantage over S5 grows with costs (headline vs S5 at 25 bps: 0.835 vs 0.592), because S5 trades so much more.
 - **Models:** with Ω-A the three models end close together (0.86–0.89), because BL shrinks all of them toward the same prior.
 
 ### D4.10 Why the views still move μ_BL noticeably
 - Diagonal Ω-A is about 19 × τσ², yet μ_BL moves about 50% of the way to the views across stocks (elastic net). The reason is that τΣ is far from diagonal: along the few market and sector directions with large eigenvalues the prior is uncertain, so views pass through there, while stock-specific differences are shrunk hard. A diagonal ratio understates the views' influence; the diagnostics table reports the actual movement.
+
+## Advisor feedback (received 17 Oct 2026, on the Phase 4 report)
+
+### A3 Comments and actions
+- **Positive:** BL integration clearly explained; reduced turnover correctly separated from statistically unconfirmed performance gains; the Ω-A vs Ω-B comparison and the diagnosis and rescaling of bootstrap disagreement were noted as thoughtful; negative findings and sensitivity checks strengthen the work.
+- **Wording:** replace "forecasts carry no real signal" with "no reliable predictive benefit was detected under the tested conditions." → Done in D3.11, D3.15, D4.8, D4.9 and in all reports from now on. The precise claim is about these features, this universe and this period, not about prediction in general.
+- **Next-week priority:** one reproducible, tested example of the tool, showing how amount, risk tolerance and sector preferences determine an allocation that satisfies the constraints. → Phase 5, D5.x.
+- **Reports:** explain not only which model is used but how it is set up and used (inputs, parameters, procedure). → From this week the weekly report includes a set-up section with every parameter.
+
+## Phase 5 — Recommendation tool (17 Oct 2026)
+
+### D5.1 One tested, reproducible example first (advisor A3)
+- The tool is built as a command-line program (`python -m src.recommend`) plus six fixed worked examples in `config.yaml`, all covered by tests. A Streamlit interface is optional (the plan's first cut if time is short) and can sit on top of the same `recommend()` function later.
+
+### D5.2 The model behind a recommendation
+- The Phase 4 headline, unchanged: elastic-net forecasts → Black–Litterman (Ω-A, τ = 0.05, δ = 2.5, market-cap prior) → constrained mean-variance. No new model choice is made for the tool, so its behaviour is the one that was backtested.
+- Forecasts are produced by re-running the Phase 3 walk-forward up to the recommendation date (same yearly retrain dates). A test confirms they equal the Phase 3 forecasts on every shared date. Runtime about 2 seconds.
+- **Date:** the latest month-end in the data (31 Aug 2026) by default, or any earlier month-end with `--as-of`. Everything is read from data up to that date (tested by scrambling all later data). Prices are therefore those of the data end date, not today's: the tool is a simulation, as the plan states.
+
+### D5.3 Risk tolerance
+- low / medium / high → γ = 10 / 5 / 2 (plan 2.6). The output reports the resulting expected volatility so the choice has a concrete meaning: 8.4% / 10.2% / 15.2% a year in the worked examples B–D.
+
+### D5.4 Sector preferences are constraints, not filters
+- Exclude → sector bound (0, 0); maximum → (0, u); minimum → (l, 1). They enter the same optimization problem as the per-stock cap, so the solver guarantees them (T4 holds with the extra multipliers) and the rest of the portfolio is re-optimized around them, instead of deleting stocks afterwards and rescaling.
+- Requests are validated before solving, with a message saying what to change: amount ≤ 0, unknown risk level or sector, bounds outside [0, 1] (not silently clipped), minimum > maximum (e.g. excluding a sector and also asking for a minimum in it), minimums summing to more than 100%, or too few allowed stocks to reach 100% under the 10% cap.
+
+### D5.5 From weights to whole shares
+- Price = close at the recommendation date (split-adjusted, not dividend-adjusted: the real share price).
+- Step 1: round each holding down. Step 2a: if rounding left a sector below its minimum, buy shares in that sector first. Step 2b: buy single shares only where it brings the holding closer to its target (gap > price/2), choosing the largest improvement, within every stock and sector cap.
+- **Rejected:** "spend the cash on whatever is most under-filled". The first version did this and bought one $944 COST share to fill a $236 gap, putting 9.4% in a stock targeted at 2.4%. Within the caps, but away from the optimizer's portfolio.
+- **Rejected:** fractional shares. Not every broker offers them, and the plan asks for whole-share allocations with leftover cash.
+- Weights of the holdings are measured against the full amount, so cash counts as unallocated; that is the stricter way to check minimums.
+
+### D5.6 Worked examples (as of 31 Aug 2026; `phase5_examples.csv`)
+| Scenario | γ | Holdings | Cash | Vol (target → held) | Max weight gap |
+|---|---|---|---|---|---|
+| A: $10k, medium, no preferences | 5 | 36 | $526 | 10.2% → 9.7% | 1.5 pts |
+| B: $10k, medium, no Energy, IT ≤ 20% | 5 | 31 | $1,400 | 10.2% → 8.9% | 2.4 pts |
+| C: $10k, low, as B | 10 | 31 | $129 | 8.4% → 8.2% | 3.8 pts |
+| D: $10k, high, as B | 2 | 14 | $1,652 | 15.2% → 12.6% | 4.9 pts |
+| E: $250k, medium, as B | 5 | 44 | $958 | 10.2% → 10.2% | 0.1 pts |
+| F: $10k, medium, Health Care ≥ 15% | 5 | 31 | $870 | 10.2% → 9.1% | 2.4 pts |
+- Every constraint holds in every scenario, for target weights and for whole shares.
+- Preferences change the allocation as intended: in B, Energy goes from 4.9% to 0 and IT from 23.3% to exactly 20%, with the freed weight spread mainly into Consumer Discretionary, Consumer Staples and Industrials. The model's expected excess return barely changes (5.86% → 5.85% a year), so in this model these preferences cost almost nothing.
+
+### D5.7 Limitation found: small amounts can't follow the target closely
+- At $10,000, whole shares of high-priced stocks leave 1–17% in cash and holdings up to 4.9 points away from target; held volatility is below the target's because cash has none. At $250,000 the gap is 0.1 points and cash 0.4%. The output always shows target vs held weights and both volatilities, so the user sees the difference. Measured for scenario B's preferences: largest weight gap 2.40 / 1.38 / 0.75 / 0.44 / 0.14 points at $10k / $25k / $50k / $100k / $250k (cash 14.0% / 1.9% / 0.2% / 0.0% / 0.4%). So about $100,000 keeps every holding within half a point of its target. Fractional shares or a stated minimum amount would fix it; noted for the report's limitations.
+
+### D5.8 Wording of model outputs
+- The expected excess return is labelled "a model estimate, not a promise" in the output, given the Phase 3–4 finding that no reliable predictive benefit was detected under the tested conditions.
+
+## Decisions for the week of 19 Oct 2026 (recorded 17 Oct, before any work on them)
+
+### A4 Advisor: sectors are chosen for the user (it's a project, not an app)
+- The tool will take only **amount** and **risk tolerance**. Sector constraints are set by us in `config.yaml`; the user has no sector input.
+- **Rule chosen: no sector above 25% of the portfolio, no sector excluded**, on top of the 10% per-stock cap. Reasons: a standard diversification limit; it rarely binds (IT reaches 23.3% without it), so it changes the tested strategy as little as possible; it needs no view on which sectors are "good".
+- **Consistency:** the same rule will be applied to every optimized strategy in the backtest (S3–S6) and Phases 2–4 re-run, so the tool still runs exactly the strategy that was evaluated. Implementation next week; the user-preference code (`--exclude`, `--max-sector`, `--min-sector`) and its tests will be removed or turned into fixed config.
+
+### E1 Planned experiment: weekly rebalancing (specified before any weekly result)
+- **Question:** do the conclusions hold at a weekly frequency, and do the forecast tests gain power from ~4× more cross-sections?
+- **Why weekly, not daily:** the precision of Sharpe-ratio estimates depends on the length of the sample in years, not on the number of observations (Lo 2002: the annualized standard error ≈ √((1 + SR²/2)/years), frequency cancels), so higher frequency will not sharpen the portfolio tests. Daily targets are the noisiest and daily rebalancing the most expensive; the advisor's own guidance (meeting of 15 Oct) was to aggregate to lower frequency.
+- **One change only:** rebalance and forecast weekly (last trading day of each week); target = next-week excess return. Everything else as in the monthly headline: same 13 feature definitions and windows in trading days, same universe, elastic net with the same α / l1-ratio grid, Black–Litterman with Ω-A, τ = 0.05, δ = 2.5, γ = 5, 10% stock cap, 10 bps costs. Horizon-dependent settings scaled to keep the same calendar length: retrain every 52 weeks; validation = last 104 weeks; Ω-A window 104 weeks with a 52-week warm-up; covariance from 252 trading days scaled ×5 to weekly; out-of-sample from the first week of 2016.
+- **Reported:** the same forecast metrics (R²_oos, rank IC with Newey–West t, quintile spread) and portfolio metrics (annualized ×52), S1, S4, S5, S6 side by side with the monthly results.
+- **Status:** a robustness experiment. **The monthly results stay the main results whatever the weekly ones show**, and the weekly ones are reported in full either way.
+

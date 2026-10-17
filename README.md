@@ -22,7 +22,7 @@ All parameters are in [config.yaml](config.yaml). Run every command from the rep
 | 2. Backtest engine & baselines | done | `python -m notebooks.phase2_backtest` |
 | 3. ML forecasting | done | `python -m notebooks.phase3_forecasting` |
 | 4. Black–Litterman integration | done | `python -m notebooks.phase4_black_litterman` |
-| 5. Demo & final report | not started | — |
+| 5. Demo & final report | tool done (CLI + tested examples); figures, report to come | `python -m src.recommend ...` |
 
 ### Phase 0 — data
 
@@ -182,6 +182,36 @@ Outputs:
 | `report/figures/bl_wealth.png` | growth of $1: S1, S4, S5 and headline S6 |
 | `report/figures/bl_turnover.png` | turnover of S5 vs S6 (each Ω) per model |
 | `report/figures/bl_tau.png` | Sharpe and turnover of S6 across τ |
+
+### Phase 5 — recommendation tool
+
+```bash
+python -m src.recommend --amount 10000 --risk medium --exclude Energy --max-sector "Information Technology=0.2"
+python -m src.recommend --amount 10000 --risk low --min-sector "Health Care=0.15" --json out.json
+python -m src.recommend --amount 10000 --risk medium --as-of 2022-06-30     # what it would have said then
+python -m notebooks.phase5_examples      # the six worked examples in config.yaml
+pytest tests/test_recommend.py
+```
+
+[src/recommend.py](src/recommend.py) turns a request into a whole-share portfolio:
+1. **Inputs:** amount (> 0), risk tolerance (low / medium / high → γ = 10 / 5 / 2), optional sector preferences: `--exclude` (hold 0%), `--max-sector "Sector=0.2"`, `--min-sector "Sector=0.15"`.
+2. **Checks first:** malformed or impossible requests are rejected with the reason (unknown sector, bounds outside [0, 1], minimums above 100%, or too few allowed stocks for 100% under the 10% per-stock cap).
+3. **Model:** the Phase 4 headline: elastic-net forecasts (re-run with the Phase 3 walk-forward up to the recommendation date), Black–Litterman with Ω-A and τ = 0.05, the trailing 252-day Σ.
+4. **Target weights:** the same constrained mean-variance problem as the backtest, with the user's sector bounds added (long-only, ≤ 10% per stock).
+5. **Whole shares** at the close of the recommendation date: round down; then refill any sector pushed below its minimum; then spend cash only where it moves a holding closer to its target, never breaking a cap.
+6. **Output:** holdings (shares, value, weight vs target), cash, expected volatility, model expected excess return, and every constraint checked on both the target weights and the whole-share holdings.
+
+| Test | Result checked |
+|---|---|
+| `test_worked_example_satisfies_every_constraint` | $10,000, medium, no Energy, IT ≤ 20%: every constraint holds for target weights and for whole shares |
+| `test_higher_risk_tolerance_gives_higher_volatility` | low < medium < high ex-ante volatility |
+| `test_amount_scales_shares_not_target_weights` | the amount changes the shares, not the target; larger amounts track the target more closely |
+| `test_minimum_sector_preference_is_met` | a sector minimum holds before and after rounding to whole shares |
+| `test_invalid_or_infeasible_requests_are_rejected` | 7 kinds of bad request give a clear error |
+| `test_recommendation_is_reproducible`, `test_forecasts_match_phase3` | identical output on re-runs; the tool's forecasts equal the Phase 3 forecasts |
+| `test_past_recommendation_uses_no_later_data` | a recommendation as of 2022-06-30 is unchanged when all later data is scrambled |
+
+Outputs: `report/tables/phase5_examples.csv` (one row per scenario, with every constraint check), `phase5_example_holdings.csv`, `phase5_example_sectors.csv`, and `report/figures/recommend_sectors.png`.
 
 ## Tests
 

@@ -109,6 +109,42 @@ phase4:
   table_dir: report/tables
   figure_dir: report/figures
 
+recommend:                     # Phase 5 tool (plan Section 2.6)
+  as_of: null                  # null = last month-end in the data
+  # Worked examples for the report (reproducible: same data + config -> same output).
+  examples:
+    - name: "A: $10,000, medium risk, no preferences"
+      amount: 10000
+      risk: medium
+    - name: "B: $10,000, medium risk, no Energy, IT at most 20%"
+      amount: 10000
+      risk: medium
+      exclude: [Energy]
+      max_sector: {Information Technology: 0.20}
+    - name: "C: $10,000, low risk, same preferences as B"
+      amount: 10000
+      risk: low
+      exclude: [Energy]
+      max_sector: {Information Technology: 0.20}
+    - name: "D: $10,000, high risk, same preferences as B"
+      amount: 10000
+      risk: high
+      exclude: [Energy]
+      max_sector: {Information Technology: 0.20}
+    - name: "E: $250,000, medium risk, same preferences as B"
+      amount: 250000
+      risk: medium
+      exclude: [Energy]
+      max_sector: {Information Technology: 0.20}
+    - name: "F: $10,000, medium risk, at least 15% Health Care"
+      amount: 10000
+      risk: medium
+      min_sector: {Health Care: 0.15}
+
+phase5:
+  table_dir: report/tables
+  figure_dir: report/figures
+
 tail_risk:
   alpha: 0.95
 
