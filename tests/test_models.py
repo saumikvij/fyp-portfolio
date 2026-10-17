@@ -318,3 +318,21 @@ def test_extended_features_point_in_time(toy):
     g = a["mom_sector_rel"].groupby([a.index.get_level_values("date"),
                                      sec.reindex(a.index.get_level_values("ticker")).values])
     np.testing.assert_allclose(g.mean().values, 0, atol=1e-12)
+
+
+def test_grid_model_tunes_and_has_no_leakage(panel, dates, toy):
+    from sklearn.neighbors import KNeighborsRegressor
+    from src.models import GridModel
+
+    def knn():
+        return GridModel("KNN", lambda n_neighbors, seed: KNeighborsRegressor(n_neighbors),
+                         {"n_neighbors": [3, 10]}, CFG["seed"])
+
+    res = walk_forward(knn(), panel, dates, VAL, MIN_TRAIN)
+    assert set(res.log["n_neighbors"]) <= {3, 10}
+    assert (res.log["last_target_date"] <= res.log["retrain_date"]).all()
+    t = dates[len(dates) // 2]
+    moved = {k: (perturb_after(v, t) if k not in ("sectors", "shares_outstanding") else v)
+             for k, v in toy.items()}
+    b = walk_forward(knn(), toy_panel(moved), dates, VAL, MIN_TRAIN).forecasts
+    pd.testing.assert_frame_equal(res.forecasts.loc[:t], b.loc[:t])

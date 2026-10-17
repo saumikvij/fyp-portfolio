@@ -303,6 +303,52 @@ class RandomForestModel:
 
 
 @dataclass
+class GridModel:
+    """Any scikit-learn regressor with a small hyperparameter grid (model search, MS4).
+
+    ``factory(**params, seed=seed)`` builds the estimator; ``grid`` maps each parameter
+    to its candidate values. Tuned by validation MSE on the chronological validation
+    months, like the other models.
+    """
+
+    name: str
+    factory: object
+    grid: dict
+    seed: int
+    retrain_every: int = 12
+    features: list[str] = field(default_factory=lambda: list(FEATURES))
+    tuned: bool = True
+    params_: dict = field(default_factory=dict)
+
+    def tune(self, tune_set: pd.DataFrame, val_set: pd.DataFrame) -> dict:
+        """Try every combination in ``grid``; keep the lowest validation MSE."""
+        keys, best = list(self.grid), None
+        for values in product(*(self.grid[k] for k in keys)):
+            params = dict(zip(keys, values))
+            m = self.factory(**params, seed=self.seed).fit(tune_set[self.features].values,
+                                                           tune_set["target"].values)
+            mse = _mse(m.predict(val_set[self.features].values), val_set["target"].values)
+            if best is None or mse < best["val_mse"]:
+                best = {**params, "val_mse": mse}
+        return best
+
+    def fit(self, train: pd.DataFrame) -> None:
+        self.model_ = self.factory(**self.params_, seed=self.seed)
+        self.model_.fit(train[self.features].values, train["target"].values)
+
+    def predict_array(self, X: np.ndarray) -> np.ndarray:
+        return self.model_.predict(X)
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        return self.predict_array(X[self.features].values)
+
+    def clone(self, seed: int) -> "GridModel":
+        c = copy.deepcopy(self)
+        c.seed = seed
+        return c
+
+
+@dataclass
 class WalkForwardResult:
     """Forecasts and, with copies, their disagreement (both forecast date x ticker),
     plus the retrain log and the fitted models."""

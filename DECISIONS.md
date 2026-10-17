@@ -408,3 +408,10 @@ Unchanged and already documented: survivorship bias (D0.2, approved A1), current
 - Score = mean monthly rank IC of the forecasts over the development period. Ranking is what Black–Litterman and the optimizer can use, and IC is less noisy than portfolio returns.
 - Finalists: the best setup of each model family, then the **three families with the highest development score**.
 - Then, for the three finalists only: holdout forecast metrics, and S6 (Black–Litterman, Ω-A, τ = 0.05, γ = 5) with Sharpe, turnover and drawdown reported separately for development and holdout, next to the original headline S6, the prior alone, S4 and 1/N.
+
+### MS4 Search widened (17 Oct, after the first run was stopped; holdout still unused)
+- At the student's request: **3 more model families**: Huber regression (linear, but down-weights extreme months, since returns have fat tails), extra trees (a random forest with random split points, less prone to fit noise) and k-nearest neighbours (forecast = average outcome of the most similar past stock-months). **More training windows:** expanding, rolling 8, 6, 5 and 4 years.
+- Grid: 7 families × 5 windows × 2 targets × 2 signal sets = **140 setups**.
+- The first run (48 setups) was stopped before any score was looked at and before the holdout stage; its saved forecasts are reused (identical code and settings).
+- **Two stages, so the holdout is used once:** stage 1 scores every setup on the development period only; stage 2 (`--stage final`) evaluates the finalists on the holdout, and only runs when every setup has been searched.
+- More setups make the best development score more optimistic purely by chance (the more you try, the better the luckiest one looks). The holdout result is the honest number; the development score of the winner is not.

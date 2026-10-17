@@ -84,8 +84,8 @@ ml:                            # Phase 3 forecasting (plan Section 4)
 
 model_search:                  # MS1–MS3 in DECISIONS.md (fixed before running)
   dev_end: "2021-12-31"        # setups compared only on forecasts made up to here
-  families: [Elastic net, LightGBM, MLP, Random forest]
-  train_windows: [null, 72, 48]    # months; null = expanding
+  families: [Elastic net, LightGBM, MLP, Random forest, Huber, Extra trees, KNN]
+  train_windows: [null, 96, 72, 60, 48]    # months; null = expanding
   targets: [raw, demeaned]
   feature_sets: [base, extended]
   n_finalists: 3
@@ -94,6 +94,16 @@ model_search:                  # MS1–MS3 in DECISIONS.md (fixed before running
     max_depth: [4, 8]
     min_samples_leaf: [50, 200]
     max_features: 0.5
+  huber:                       # robust linear regression (down-weights extreme months)
+    epsilon: [1.35, 2.0]
+    alpha: [1.0e-4, 1.0e-2]
+  extra_trees:                 # like a random forest but with random split points
+    n_estimators: 300
+    max_depth: [4, 8]
+    min_samples_leaf: [50, 200]
+    max_features: 0.5
+  knn:                         # average of the most similar past stock-months
+    n_neighbors: [50, 200, 500]
   out_dir: data/ml/search      # forecasts of every setup (git-ignored)
 
 phase3:
