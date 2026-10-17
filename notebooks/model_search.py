@@ -47,6 +47,38 @@ from src.models import (ElasticNetModel, GridModel, HistoricalMeanModel, LightGB
 OUT = Path("report/experiments")
 
 
+def build_wide(family: str, cfg: dict, features: list[str], every: int):
+    """Round 4 (MS8): the same families with the wider grids in ``model_search.round4.wide``."""
+    w, seed, ml = cfg["model_search"]["round4"]["wide"][family], cfg["seed"], cfg["ml"]
+    if family == "KNN":
+        return GridModel("KNN", lambda n_neighbors, weights, seed: KNeighborsRegressor(
+            n_neighbors=n_neighbors, weights=weights), w, seed, every, features)
+    if family == "MLP":
+        m = ml["mlp"]
+        return MLPModel(w["hidden_layers"], w["alphas"], m["learning_rate_init"], m["batch_size"],
+                        m["max_epochs"], m["patience"], seed, retrain_every=every,
+                        features=features)
+    if family == "LightGBM":
+        g = ml["lightgbm"]
+        return LightGBMModel(w["num_leaves"], w["min_child_samples"], g["learning_rate"],
+                             g["max_trees"], g["early_stopping_rounds"], g["feature_fraction"],
+                             g["bagging_fraction"], g["bagging_freq"], g["lambda_l2"], seed,
+                             retrain_every=every, features=features)
+    if family == "Hist gradient boosting":
+        h = cfg["model_search"]["hist_gradient_boosting"]
+        return GridModel("Hist gradient boosting", lambda max_depth, learning_rate,
+                         min_samples_leaf, seed: HistGradientBoostingRegressor(
+                             max_depth=max_depth, learning_rate=learning_rate,
+                             max_iter=h["max_iter"], min_samples_leaf=min_samples_leaf,
+                             random_state=seed), w, seed, every, features)
+    if family == "Kernel ridge":
+        k = cfg["model_search"]["kernel_ridge"]
+        return GridModel("Kernel ridge", lambda gamma, alpha, seed: make_pipeline(
+            Nystroem(gamma=gamma, n_components=k["n_components"], random_state=seed),
+            Ridge(alpha=alpha)), w, seed, every, features)
+    raise ValueError(family)
+
+
 def build_model(family: str, cfg: dict, features: list[str]):
     ml, seed, every = cfg["ml"], cfg["seed"], cfg["ml"]["retrain_every_months"]
     if family == "Elastic net":
@@ -178,6 +210,10 @@ def main() -> None:
         fc_dir = Path(ms["out_dir"] + "_placebo")
         fc_dir.mkdir(parents=True, exist_ok=True)
     feature_lists = {**FEATURE_SETS, "niche": NICHE_SET}
+    r4 = ms.get("round4")
+    if r4 and stage != "placebo":
+        feature_lists["risk"] = r4["risk_set"]
+        panels["risk"] = panels["niche"]          # same rows; the model reads only the risk set
     realized = panels["base"]["target"].unstack().loc[dates]   # shuffled too in placebo
     hm = walk_forward(HistoricalMeanModel(), panels["base"], dates, ml["val_months"],
                       ml["min_train_months"]).forecasts
@@ -215,6 +251,25 @@ def main() -> None:
             f.to_parquet(path)
         rows.append(score(sid, fam, win, tgt, fs, f))
         print(f"[{i:3d}/{len(grid)}] {sid:56s} done  {time.time() - t0:4.0f}s")
+    if r4 and stage != "placebo":
+        grid4 = list(product(r4["families"], ms["train_windows"], ms["targets"],
+                             r4["feature_sets"], r4["retrain_every"]))
+        for i, (fam, win, tgt, fs, every) in enumerate(grid4, 1):
+            sid = setup_id(fam, win, tgt, fs) + f"__wide_r{every}"
+            path = fc_dir / f"{sid}.parquet"
+            t0 = time.time()
+            if path.exists():
+                f = pd.read_parquet(path)
+            elif stage == "final":
+                raise SystemExit(f"{sid} has not been searched yet; run stage 1 first.")
+            else:
+                f = walk_forward(build_wide(fam, cfg, feature_lists[fs], every), panels[fs],
+                                 dates, ml["val_months"], ml["min_train_months"],
+                                 train_window_months=win, target_mode=tgt).forecasts
+                f.to_parquet(path)
+            rows.append(score(sid, fam, win, tgt, fs, f))
+            print(f"[R4 {i:3d}/{len(grid4)}] {sid:66s} done  {time.time() - t0:4.0f}s")
+
     if ms.get("combine") and stage != "placebo":
         for win, tgt, fs in product(ms["train_windows"], ms["targets"], ms["feature_sets"]):
             members = [pd.read_parquet(fc_dir / f"{setup_id(fam, win, tgt, fs)}.parquet")
