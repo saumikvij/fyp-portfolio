@@ -86,7 +86,8 @@ model_search:                  # MS1–MS3 in DECISIONS.md (fixed before running
   dev_end: "2021-12-31"        # setups compared only on forecasts made up to here
   families: [Elastic net, LightGBM, MLP, Random forest, Huber, Extra trees, KNN,
              PCA regression, Hist gradient boosting, Kernel ridge,
-             Logistic classifier, LightGBM classifier, Linear SVR]
+             Logistic classifier, LightGBM classifier, Linear SVR,
+             Quantile regression, Naive Bayes classifier]
   combine: true                # also an equal-weight average of all families (MS6)
   train_windows: [null, 96, 72, 60, 48]    # months; null = expanding
   targets: [raw, demeaned]
@@ -127,6 +128,8 @@ model_search:                  # MS1–MS3 in DECISIONS.md (fixed before running
     n_estimators: [50, 200]
   linear_svr:
     C: [0.01, 1.0]
+  quantile_regression:         # median regression (MS9)
+    alpha: [0.0, 0.001]
   placebo:                     # MS7: same search on targets shuffled within each month
     seed: 7
     families: [Elastic net, Huber, PCA regression, LightGBM, KNN, Hist gradient boosting,

@@ -34,7 +34,8 @@ from src.ml_eval import quantile_spread, r2_oos, rank_ic, summarize_series
 from sklearn.decomposition import PCA
 from sklearn.ensemble import ExtraTreesRegressor, HistGradientBoostingRegressor
 from sklearn.kernel_approximation import Nystroem
-from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.linear_model import LogisticRegression, QuantileRegressor, Ridge
+from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import LinearSVR
 import lightgbm as lgb
 from sklearn.pipeline import make_pipeline
@@ -154,6 +155,14 @@ def build_model(family: str, cfg: dict, features: list[str]):
                                                   n_jobs=1, verbose=-1),
                                {"num_leaves": c["num_leaves"], "n_estimators": c["n_estimators"]},
                                seed, every, features)
+    if family == "Quantile regression":
+        q = cfg["model_search"]["quantile_regression"]
+        return GridModel("Quantile regression", lambda alpha, seed: QuantileRegressor(
+            quantile=0.5, alpha=alpha, solver="highs"), {"alpha": q["alpha"]}, seed, every,
+            features)
+    if family == "Naive Bayes classifier":
+        return ClassifierModel("Naive Bayes classifier", lambda var_smoothing, seed: GaussianNB(
+            var_smoothing=var_smoothing), {"var_smoothing": [1e-9]}, seed, every, features)
     if family == "Linear SVR":
         c = cfg["model_search"]["linear_svr"]
         return GridModel("Linear SVR", lambda C, seed: LinearSVR(
