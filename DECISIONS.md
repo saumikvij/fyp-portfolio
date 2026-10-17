@@ -462,3 +462,6 @@ Unchanged and already documented: survivorship bias (D0.2, approved A1), current
 
 ### WU2 Placebo for the wide universe (18 Oct)
 - Same as MS7 for the ~1,050 stocks: the 9 fast families on targets shuffled within each month (36 setups), to show what scores luck alone produces at this size. The wide-universe results are judged against it.
+
+### WU3 Quantile regression on the wide universe uses a 25,000-row subsample (18 Oct)
+- Its exact solver (an LP over every row) did not finish one setup in 27 minutes on ~200,000 rows. On the wide universe only, each training set is randomly subsampled to 25,000 rows (seeded) before fitting; prediction is unchanged. The 51-stock search is unaffected (never more than ~9,600 rows).

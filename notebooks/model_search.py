@@ -26,7 +26,7 @@ import pandas as pd
 from src.backtest import (black_litterman_strategy, equal_weight, markowitz_strategy,
                           rebalance_dates, run_backtest)
 from src.data import load_config, load_processed
-from src.experiment_models import ClassifierModel, shuffle_targets
+from src.experiment_models import ClassifierModel, SubsampledRegressor, shuffle_targets
 from src.experiment_signals import NICHE_SET, build_niche_panel, rank_normalize_niche
 from src.features import FEATURE_SETS, add_targets, build_feature_panel, rank_normalize
 from src.metrics import max_drawdown, performance_summary
@@ -161,9 +161,13 @@ def build_model(family: str, cfg: dict, features: list[str]):
                                seed, every, features)
     if family == "Quantile regression":
         q = cfg["model_search"]["quantile_regression"]
-        return GridModel("Quantile regression", lambda alpha, seed: QuantileRegressor(
-            quantile=0.5, alpha=alpha, solver="highs"), {"alpha": q["alpha"]}, seed, every,
-            features)
+        n_max = q.get("max_rows")
+
+        def quantile(alpha, seed):
+            m = QuantileRegressor(quantile=0.5, alpha=alpha, solver="highs")
+            return SubsampledRegressor(m, n_max, seed) if n_max else m
+        return GridModel("Quantile regression", quantile, {"alpha": q["alpha"]}, seed, every,
+                         features)
     if family == "Naive Bayes classifier":
         return ClassifierModel("Naive Bayes classifier", lambda var_smoothing, seed: GaussianNB(
             var_smoothing=var_smoothing), {"var_smoothing": [1e-9]}, seed, every, features)

@@ -156,7 +156,7 @@ model_search:                  # MS1–MS3 in DECISIONS.md (fixed before running
       random_forest: {n_estimators: 100, max_samples: 0.3}
       extra_trees: {n_estimators: 100, max_samples: 0.3}
       knn: {n_neighbors: [200, 1000]}
-      quantile_regression: {alpha: [0.0]}
+      quantile_regression: {alpha: [0.0], max_rows: 25000}
     out_dir: data/ml/search_wide
   out_dir: data/ml/search      # forecasts of every setup (git-ignored)
 

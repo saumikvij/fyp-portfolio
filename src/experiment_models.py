@@ -83,3 +83,24 @@ def shuffle_targets(panel: pd.DataFrame, seed: int) -> pd.DataFrame:
         vals = out["target"].values[idx]
         out.iloc[idx, out.columns.get_loc("target")] = rng.permutation(vals)
     return out
+
+
+class SubsampledRegressor:
+    """Fit any regressor on a seeded random subsample of at most ``n`` rows.
+
+    Used only where an exact solver does not scale (quantile regression on the wide
+    universe, DECISIONS WU3); prediction is unchanged.
+    """
+
+    def __init__(self, base, n: int, seed: int):
+        self.base, self.n, self.seed = base, n, seed
+
+    def fit(self, X, y):
+        if len(y) > self.n:
+            idx = np.random.default_rng(self.seed).choice(len(y), self.n, replace=False)
+            X, y = X[idx], y[idx]
+        self.base.fit(X, y)
+        return self
+
+    def predict(self, X):
+        return self.base.predict(X)
