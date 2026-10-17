@@ -336,3 +336,19 @@ def test_grid_model_tunes_and_has_no_leakage(panel, dates, toy):
              for k, v in toy.items()}
     b = walk_forward(knn(), toy_panel(moved), dates, VAL, MIN_TRAIN).forecasts
     pd.testing.assert_frame_equal(res.forecasts.loc[:t], b.loc[:t])
+
+
+def test_classifier_model_and_shuffle(panel, dates):
+    from sklearn.linear_model import LogisticRegression
+    from src.experiment_models import ClassifierModel, shuffle_targets
+
+    clf = ClassifierModel("Logistic", lambda C, seed: LogisticRegression(C=C, max_iter=500),
+                          {"C": [0.1, 1.0]}, CFG["seed"])
+    res = walk_forward(clf, panel, dates, VAL, MIN_TRAIN)
+    assert (res.log["last_target_date"] <= res.log["retrain_date"]).all()
+    assert res.forecasts.notna().all().all()
+    sh = shuffle_targets(panel, 0)
+    g0 = panel.groupby(level="date")["target"].apply(lambda x: sorted(x.dropna()))
+    g1 = sh.groupby(level="date")["target"].apply(lambda x: sorted(x.dropna()))
+    assert (g0 == g1).all()                                   # same values each month
+    assert not np.allclose(panel["target"].fillna(0), sh["target"].fillna(0))

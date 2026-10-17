@@ -4,6 +4,7 @@ signals, then feed the three finalist models into Black–Litterman. Design: DEC
 Run from the repo root:
     python -m notebooks.model_search                 # stage 1: search, development only
     python -m notebooks.model_search --stage final   # stage 2: finalists on the holdout (once)
+    python -m notebooks.model_search --stage placebo # luck check: same search, shuffled targets
 
 Every setup is trained with the Phase 3 walk-forward (train on data up to each
 month-end, forecast the next month). Setups are compared ONLY on forecasts made up to
@@ -25,13 +26,17 @@ import pandas as pd
 from src.backtest import (black_litterman_strategy, equal_weight, markowitz_strategy,
                           rebalance_dates, run_backtest)
 from src.data import load_config, load_processed
+from src.experiment_models import ClassifierModel, shuffle_targets
+from src.experiment_signals import NICHE_SET, build_niche_panel, rank_normalize_niche
 from src.features import FEATURE_SETS, add_targets, build_feature_panel, rank_normalize
 from src.metrics import max_drawdown, performance_summary
 from src.ml_eval import quantile_spread, r2_oos, rank_ic, summarize_series
 from sklearn.decomposition import PCA
 from sklearn.ensemble import ExtraTreesRegressor, HistGradientBoostingRegressor
 from sklearn.kernel_approximation import Nystroem
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.svm import LinearSVR
+import lightgbm as lgb
 from sklearn.pipeline import make_pipeline
 from sklearn.linear_model import HuberRegressor
 from sklearn.neighbors import KNeighborsRegressor
@@ -102,6 +107,26 @@ def build_model(family: str, cfg: dict, features: list[str]):
             Nystroem(gamma=gamma, n_components=k["n_components"], random_state=seed),
             Ridge(alpha=alpha)), {"gamma": k["gamma"], "alpha": k["alpha"]}, seed, every,
             features)
+    if family == "Logistic classifier":
+        c = cfg["model_search"]["logistic_classifier"]
+        return ClassifierModel("Logistic classifier", lambda C, seed: LogisticRegression(
+            C=C, max_iter=2000), {"C": c["C"]}, seed, every, features)
+    if family == "LightGBM classifier":
+        c = cfg["model_search"]["lightgbm_classifier"]
+        return ClassifierModel("LightGBM classifier", lambda num_leaves, n_estimators, seed:
+                               lgb.LGBMClassifier(num_leaves=num_leaves, n_estimators=n_estimators,
+                                                  learning_rate=0.05, min_child_samples=100,
+                                                  subsample=0.8, subsample_freq=1,
+                                                  colsample_bytree=0.8, random_state=seed,
+                                                  deterministic=True, force_row_wise=True,
+                                                  n_jobs=1, verbose=-1),
+                               {"num_leaves": c["num_leaves"], "n_estimators": c["n_estimators"]},
+                               seed, every, features)
+    if family == "Linear SVR":
+        c = cfg["model_search"]["linear_svr"]
+        return GridModel("Linear SVR", lambda C, seed: LinearSVR(
+            C=C, epsilon=0.0, max_iter=20000, random_state=seed), {"C": c["C"]}, seed, every,
+            features)
     raise ValueError(family)
 
 
@@ -121,7 +146,7 @@ def forecast_metrics(f, realized, hm, q) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stage", choices=["search", "final"], default="search")
+    ap.add_argument("--stage", choices=["search", "final", "placebo"], default="search")
     stage = ap.parse_args().stage
     cfg = load_config()
     ms, ml, bt = cfg["model_search"], cfg["ml"], cfg["backtest"]
@@ -135,10 +160,25 @@ def main() -> None:
     stocks = list(cfg["universe"])
     dates = rebalance_dates(data["returns_monthly"].index, bt["oos_start"])
     dev, hold = dates[dates <= dev_end], dates[dates > dev_end]
-    panels = {fs: add_targets(rank_normalize(build_feature_panel(
-        data, stocks, cfg["data"]["benchmark"], ml["windows"], ml["rsi_days"], fs)),
-        data["returns_monthly"][stocks], data["rf_monthly"]["rf"]) for fs in ms["feature_sets"]}
-    realized = panels["base"]["target"].unstack().loc[dates]
+    def make_panel(fs):
+        if fs == "niche":
+            raw = rank_normalize_niche(build_niche_panel(
+                data, stocks, cfg["data"]["benchmark"], ml["windows"], ml["rsi_days"],
+                Path(cfg["data"]["raw_dir"]) / "prices_raw.parquet"))
+        else:
+            raw = rank_normalize(build_feature_panel(data, stocks, cfg["data"]["benchmark"],
+                                                     ml["windows"], ml["rsi_days"], fs))
+        return add_targets(raw, data["returns_monthly"][stocks], data["rf_monthly"]["rf"])
+
+    panels = {fs: make_panel(fs) for fs in ms["feature_sets"]}
+    if stage == "placebo":
+        # Same data and code, but each month's targets shuffled across stocks: any
+        # "skill" found here is luck (MS7). Kept apart from the real search results.
+        panels = {fs: shuffle_targets(p, ms["placebo"]["seed"]) for fs, p in panels.items()}
+        fc_dir = Path(ms["out_dir"] + "_placebo")
+        fc_dir.mkdir(parents=True, exist_ok=True)
+    feature_lists = {**FEATURE_SETS, "niche": NICHE_SET}
+    realized = panels["base"]["target"].unstack().loc[dates]   # shuffled too in placebo
     hm = walk_forward(HistoricalMeanModel(), panels["base"], dates, ml["val_months"],
                       ml["min_train_months"]).forecasts
     print(f"Development: forecasts {dev[0]:%b %Y} – {dev[-1]:%b %Y} ({len(dev)}); "
@@ -157,7 +197,8 @@ def main() -> None:
 
     # ------------------------------------------------------------ search (dev only)
     rows = []
-    grid = list(product(ms["families"], ms["train_windows"], ms["targets"], ms["feature_sets"]))
+    fams = ms["placebo"]["families"] if stage == "placebo" else ms["families"]
+    grid = list(product(fams, ms["train_windows"], ms["targets"], ms["feature_sets"]))
     for i, (fam, win, tgt, fs) in enumerate(grid, 1):
         sid = setup_id(fam, win, tgt, fs)
         path = fc_dir / f"{sid}.parquet"
@@ -167,14 +208,14 @@ def main() -> None:
         elif stage == "final":
             raise SystemExit(f"{sid} has not been searched yet; run stage 1 first.")
         else:
-            res = walk_forward(build_model(fam, cfg, FEATURE_SETS[fs]), panels[fs], dates,
+            res = walk_forward(build_model(fam, cfg, feature_lists[fs]), panels[fs], dates,
                                ml["val_months"], ml["min_train_months"],
                                train_window_months=win, target_mode=tgt)
             f = res.forecasts
             f.to_parquet(path)
         rows.append(score(sid, fam, win, tgt, fs, f))
         print(f"[{i:3d}/{len(grid)}] {sid:56s} done  {time.time() - t0:4.0f}s")
-    if ms.get("combine"):
+    if ms.get("combine") and stage != "placebo":
         for win, tgt, fs in product(ms["train_windows"], ms["targets"], ms["feature_sets"]):
             members = [pd.read_parquet(fc_dir / f"{setup_id(fam, win, tgt, fs)}.parquet")
                        for fam in ms["families"]]
@@ -183,6 +224,13 @@ def main() -> None:
             f.to_parquet(fc_dir / f"{sid}.parquet")
             rows.append(score(sid, "Average of all", win, tgt, fs, f))
     log = pd.DataFrame(rows).sort_values("dev_ic_mean", ascending=False)
+    if stage == "placebo":
+        log.to_csv(OUT / "placebo_log.csv", index=False)
+        print(f"\nPLACEBO ({len(log)} setups, shuffled targets): best development IC "
+              f"{log['dev_ic_mean'].max():+.4f}; 95th percentile {log['dev_ic_mean'].quantile(.95):+.4f}; "
+              f"positive in all blocks: {int(log['consistent'].sum())} of {len(log)} "
+              f"({log['consistent'].mean():.0%}; pure luck ≈ 12.5%)")
+        return
     log.to_csv(OUT / "search_log.csv", index=False)
 
     # ------------------------------------------------------------ finalists (rule MS3)
