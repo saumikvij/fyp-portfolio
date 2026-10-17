@@ -459,3 +459,6 @@ Unchanged and already documented: survivorship bias (D0.2, approved A1), current
 - **Scope (compute):** about 30× more rows, so a focused grid: all 15 families × expanding window × both targets × base and niche signals = 60 setups, same walk-forward, same development/holdout split and 3-block rule. Tree ensembles use 100 trees and 30% row subsamples to keep run times to minutes.
 - **Reported:** rank IC over the whole wide universe, by size group (S&P 500 / 400 / 600 members), and on the 51 original stocks only (does training on more stocks help forecast our 51?).
 - **Portfolio part later, only if forecasts show anything:** with ~1,500 stocks the sample covariance from 252 days is singular, so a portfolio would need Ledoit–Wolf shrinkage (plan item O2).
+
+### WU2 Placebo for the wide universe (18 Oct)
+- Same as MS7 for the ~1,050 stocks: the 9 fast families on targets shuffled within each month (36 setups), to show what scores luck alone produces at this size. The wide-universe results are judged against it.

@@ -2,7 +2,8 @@
 (~1,050 stocks, DECISIONS WU1). Development period only; holdout untouched.
 
 Run after ``python -m src.experiment_universe``:
-    python -m notebooks.wide_search
+    python -m notebooks.wide_search             # real search
+    python -m notebooks.wide_search --placebo   # same, targets shuffled within each month
 
 Scores each setup on development forecasts (Dec 2015 – Dec 2021): rank IC over the whole
 universe, by size group (S&P 500 / 400 / 600 members), and on the original 51 stocks,
@@ -11,6 +12,7 @@ plus the 3-block consistency rule. Re-running skips setups already saved.
 
 from __future__ import annotations
 
+import argparse
 import copy
 import time
 from itertools import product
@@ -22,6 +24,7 @@ import pandas as pd
 from notebooks.model_search import build_model, setup_id
 from src.backtest import rebalance_dates
 from src.data import load_config
+from src.experiment_models import shuffle_targets
 from src.experiment_signals import NICHE_SET, build_niche_panel, rank_normalize_niche
 from src.experiment_universe import WIDE, load_wide
 from src.features import FEATURE_SETS, add_targets, build_feature_panel, rank_normalize
@@ -32,6 +35,9 @@ OUT = Path("report/experiments")
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--placebo", action="store_true")
+    placebo = ap.parse_args().placebo
     cfg = load_config()
     ms, ml, bt = cfg["model_search"], cfg["ml"], cfg["backtest"]
     wcfg = ms["wide"]
@@ -39,7 +45,8 @@ def main() -> None:
     cfg = copy.deepcopy(cfg)
     for fam, over in wcfg["overrides"].items():
         cfg["model_search"][fam].update(over)
-    fc_dir = Path(wcfg["out_dir"])
+    fc_dir = Path(wcfg["out_dir"] + ("_placebo" if placebo else ""))
+    log_name = "wide_placebo_log.csv" if placebo else "wide_search_log.csv"
     fc_dir.mkdir(parents=True, exist_ok=True)
 
     data = load_wide()
@@ -68,6 +75,8 @@ def main() -> None:
         return p
 
     panels = {fs: make_panel(fs) for fs in wcfg["feature_sets"]}
+    if placebo:
+        panels = {fs: shuffle_targets(p, ms["placebo"]["seed"]) for fs, p in panels.items()}
     feature_lists = {**FEATURE_SETS, "niche": NICHE_SET}
     realized = panels["base"]["target"].unstack().loc[dev]
     groups = {"all": stocks, **{g: list(uni.index[uni["index"] == g])
@@ -75,7 +84,8 @@ def main() -> None:
               "original 51": [s for s in cfg["universe"] if s in stocks]}
 
     rows = []
-    grid = list(product(ms["families"], wcfg["windows"], wcfg["targets"], wcfg["feature_sets"]))
+    fams = ms["placebo"]["families"] if placebo else ms["families"]
+    grid = list(product(fams, wcfg["windows"], wcfg["targets"], wcfg["feature_sets"]))
     for i, (fam, win, tgt, fs) in enumerate(grid, 1):
         sid = setup_id(fam, win, tgt, fs)
         path = fc_dir / f"{sid}.parquet"
@@ -99,12 +109,12 @@ def main() -> None:
                 row.update({f"block{j + 1}_ic": v for j, v in enumerate(blocks)})
                 row["consistent"] = bool(all(np.nan_to_num(v, nan=-1) > 0 for v in blocks))
         rows.append(row)
-        pd.DataFrame(rows).to_csv(OUT / "wide_search_log.csv", index=False)   # save as we go
+        pd.DataFrame(rows).to_csv(OUT / log_name, index=False)   # save as we go
         print(f"[{i:2d}/{len(grid)}] {sid:52s} done  {time.time() - t0:5.0f}s", flush=True)
 
     log = pd.DataFrame(rows).sort_values("ic_all", ascending=False)
-    log.to_csv(OUT / "wide_search_log.csv", index=False)
-    print(f"\nWide universe ({len(stocks)} stocks), development only:")
+    log.to_csv(OUT / log_name, index=False)
+    print(f"\nWide universe ({len(stocks)} stocks){' PLACEBO' if placebo else ''}, development only:")
     print(log[["setup", "ic_all", "t_all", "ic_S&P 500", "ic_S&P 400", "ic_S&P 600",
                "ic_original 51", "consistent"]].round(4).head(15).to_string(index=False))
     print(f"\nConsistent in all 3 blocks: {int(log['consistent'].sum())} of {len(log)}")
