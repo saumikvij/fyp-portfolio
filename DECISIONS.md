@@ -415,3 +415,14 @@ Unchanged and already documented: survivorship bias (D0.2, approved A1), current
 - The first run (48 setups) was stopped before any score was looked at and before the holdout stage; its saved forecasts are reused (identical code and settings).
 - **Two stages, so the holdout is used once:** stage 1 scores every setup on the development period only; stage 2 (`--stage final`) evaluates the finalists on the holdout, and only runs when every setup has been searched.
 - More setups make the best development score more optimistic purely by chance (the more you try, the better the luckiest one looks). The holdout result is the honest number; the development score of the winner is not.
+
+### MS5 Consistency rule (student's suggestion; set while stage 1 was running, before any score was seen)
+- The development period is cut into 3 blocks: forecasts made Dec 2015 – Nov 2017, Dec 2017 – Nov 2019, Dec 2019 – Dec 2021. Each setup's mean rank IC is computed in each block.
+- **Only setups with a positive IC in all 3 blocks qualify.** Among qualifying setups, the best per family (by development IC) goes forward, then the top 3 families. A setup that is good in one lucky stretch is filtered out.
+- The holdout is still used once, for the finalists, and their holdout IC is also shown **year by year** to check it holds in every period. It is never used to choose.
+- If fewer than 3 families have a consistent setup, that is reported as a finding, not worked around.
+
+### MS6 Round 1 result and round 2 (17 Oct; holdout still unused)
+- **Round 1 (140 setups, development only):** 12 passed the 3-block rule (KNN 8, LightGBM 2, MLP 2; none for elastic net, Huber, random forest or extra trees). Median development IC 0.002, best 0.040. **Luck check:** a setup with no skill has a 1-in-8 chance of being positive in 3 blocks, so about 17 of 140 would pass by chance; 12 passed. The round-1 winners are therefore not distinguishable from luck yet; the holdout will decide. The extended signals almost never passed (1 of 70 setups vs 11 of 70 for the base signals).
+- **Round 2 (student's request: keep testing, upper-undergraduate models):** 3 more families: principal-component regression (compress the signals into a few combined factors, then a straight-line fit), histogram gradient boosting (scikit-learn's boosted trees, a second implementation of the boosting idea) and kernel ridge regression (a smooth nonlinear model; RBF kernel with a Nyström approximation so it runs in seconds). Plus an **equal-weight average of all family forecasts** for each window/target/signal combination: forecast combination usually reduces noise, and with fixed equal weights nothing is fitted, so it adds no selection bias of its own.
+- Same windows, targets and signal sets: 3 × 20 + 20 averages = 80 more setups (220 in total). Same selection rule (MS3 + MS5) over all 220; the holdout is still run once, after round 2.

@@ -84,11 +84,14 @@ ml:                            # Phase 3 forecasting (plan Section 4)
 
 model_search:                  # MS1–MS3 in DECISIONS.md (fixed before running)
   dev_end: "2021-12-31"        # setups compared only on forecasts made up to here
-  families: [Elastic net, LightGBM, MLP, Random forest, Huber, Extra trees, KNN]
+  families: [Elastic net, LightGBM, MLP, Random forest, Huber, Extra trees, KNN,
+             PCA regression, Hist gradient boosting, Kernel ridge]
+  combine: true                # also an equal-weight average of all families (MS6)
   train_windows: [null, 96, 72, 60, 48]    # months; null = expanding
   targets: [raw, demeaned]
   feature_sets: [base, extended]
   n_finalists: 3
+  dev_blocks: ["2017-11-30", "2019-11-30"]   # cut points: 3 development blocks (MS5)
   random_forest:
     n_estimators: 300
     max_depth: [4, 8]
@@ -104,6 +107,18 @@ model_search:                  # MS1–MS3 in DECISIONS.md (fixed before running
     max_features: 0.5
   knn:                         # average of the most similar past stock-months
     n_neighbors: [50, 200, 500]
+  pca_regression:              # PCA on the signals, then ridge on the first components
+    n_components: [3, 6]
+    alpha: [1.0, 100.0]
+  hist_gradient_boosting:
+    max_depth: [2, 4]
+    learning_rate: [0.02, 0.1]
+    max_iter: 200
+    min_samples_leaf: 100
+  kernel_ridge:                # RBF kernel, Nystroem approximation
+    gamma: [0.1, 1.0]
+    alpha: [1.0, 100.0]
+    n_components: 300
   out_dir: data/ml/search      # forecasts of every setup (git-ignored)
 
 phase3:

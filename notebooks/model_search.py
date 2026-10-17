@@ -28,7 +28,11 @@ from src.data import load_config, load_processed
 from src.features import FEATURE_SETS, add_targets, build_feature_panel, rank_normalize
 from src.metrics import max_drawdown, performance_summary
 from src.ml_eval import quantile_spread, r2_oos, rank_ic, summarize_series
-from sklearn.ensemble import ExtraTreesRegressor
+from sklearn.decomposition import PCA
+from sklearn.ensemble import ExtraTreesRegressor, HistGradientBoostingRegressor
+from sklearn.kernel_approximation import Nystroem
+from sklearn.linear_model import Ridge
+from sklearn.pipeline import make_pipeline
 from sklearn.linear_model import HuberRegressor
 from sklearn.neighbors import KNeighborsRegressor
 
@@ -77,6 +81,27 @@ def build_model(family: str, cfg: dict, features: list[str]):
         k = cfg["model_search"]["knn"]
         return GridModel("KNN", lambda n_neighbors, seed: KNeighborsRegressor(
             n_neighbors=n_neighbors), {"n_neighbors": k["n_neighbors"]}, seed, every, features)
+    if family == "PCA regression":
+        p = cfg["model_search"]["pca_regression"]
+        return GridModel("PCA regression", lambda n_components, alpha, seed: make_pipeline(
+            PCA(n_components=n_components, random_state=seed), Ridge(alpha=alpha)),
+            {"n_components": p["n_components"], "alpha": p["alpha"]}, seed, every, features)
+    if family == "Hist gradient boosting":
+        h = cfg["model_search"]["hist_gradient_boosting"]
+        return GridModel("Hist gradient boosting", lambda max_depth, learning_rate, seed:
+                         HistGradientBoostingRegressor(max_depth=max_depth,
+                                                       learning_rate=learning_rate,
+                                                       max_iter=h["max_iter"],
+                                                       min_samples_leaf=h["min_samples_leaf"],
+                                                       random_state=seed),
+                         {"max_depth": h["max_depth"], "learning_rate": h["learning_rate"]},
+                         seed, every, features)
+    if family == "Kernel ridge":
+        k = cfg["model_search"]["kernel_ridge"]
+        return GridModel("Kernel ridge", lambda gamma, alpha, seed: make_pipeline(
+            Nystroem(gamma=gamma, n_components=k["n_components"], random_state=seed),
+            Ridge(alpha=alpha)), {"gamma": k["gamma"], "alpha": k["alpha"]}, seed, every,
+            features)
     raise ValueError(family)
 
 
@@ -104,6 +129,7 @@ def main() -> None:
     fc_dir = Path(ms["out_dir"])
     fc_dir.mkdir(parents=True, exist_ok=True)
     dev_end = pd.Timestamp(ms["dev_end"])
+    cuts = [pd.Timestamp(c) for c in ms["dev_blocks"]]
 
     data = load_processed(cfg)
     stocks = list(cfg["universe"])
@@ -117,6 +143,17 @@ def main() -> None:
                       ml["min_train_months"]).forecasts
     print(f"Development: forecasts {dev[0]:%b %Y} – {dev[-1]:%b %Y} ({len(dev)}); "
           f"holdout: {hold[0]:%b %Y} – {hold[-1]:%b %Y} ({len(hold)})")
+
+    def score(sid, fam, win, tgt, fs, f) -> dict:
+        """Development-period scores only (overall and per block, MS3 + MS5)."""
+        m = forecast_metrics(f.loc[dev], realized.loc[dev], hm.loc[dev], ml["quantiles"])
+        ic = rank_ic(f.loc[dev], realized.loc[dev])
+        block_ic = [ic[(ic.index > a) & (ic.index <= b)].mean()
+                    for a, b in zip([pd.Timestamp.min] + cuts, cuts + [dev_end])]
+        return {"setup": sid, "family": fam, "window": win or "expanding", "target": tgt,
+                "features": fs, **{f"dev_{k}": v for k, v in m.items()},
+                **{f"block{j + 1}_ic": v for j, v in enumerate(block_ic)},
+                "consistent": bool(all(np.nan_to_num(v, nan=-1) > 0 for v in block_ic))}
 
     # ------------------------------------------------------------ search (dev only)
     rows = []
@@ -135,19 +172,33 @@ def main() -> None:
                                train_window_months=win, target_mode=tgt)
             f = res.forecasts
             f.to_parquet(path)
-        m = forecast_metrics(f.loc[dev], realized.loc[dev], hm.loc[dev], ml["quantiles"])
-        rows.append({"setup": sid, "family": fam, "window": win or "expanding", "target": tgt,
-                     "features": fs, **{f"dev_{k}": v for k, v in m.items()}})
-        print(f"[{i:2d}/{len(grid)}] {sid:48s} dev IC {m['ic_mean']:+.4f} "
-              f"(NW t {m['ic_t_nw']:+.2f})  {time.time() - t0:4.0f}s")
+        rows.append(score(sid, fam, win, tgt, fs, f))
+        print(f"[{i:3d}/{len(grid)}] {sid:56s} done  {time.time() - t0:4.0f}s")
+    if ms.get("combine"):
+        for win, tgt, fs in product(ms["train_windows"], ms["targets"], ms["feature_sets"]):
+            members = [pd.read_parquet(fc_dir / f"{setup_id(fam, win, tgt, fs)}.parquet")
+                       for fam in ms["families"]]
+            f = sum(members) / len(members)
+            sid = setup_id("Average of all", win, tgt, fs)
+            f.to_parquet(fc_dir / f"{sid}.parquet")
+            rows.append(score(sid, "Average of all", win, tgt, fs, f))
     log = pd.DataFrame(rows).sort_values("dev_ic_mean", ascending=False)
     log.to_csv(OUT / "search_log.csv", index=False)
 
     # ------------------------------------------------------------ finalists (rule MS3)
-    best = log.groupby("family", sort=False).head(1)              # best setup per family
+    # Rule MS5: only setups with positive IC in every development block qualify; the best
+    # qualifying setup per family goes forward, ranked by development IC.
+    qualified = log[log["consistent"]]
+    best = qualified.groupby("family", sort=False).head(1)
     finalists = best.sort_values("dev_ic_mean", ascending=False).head(ms["n_finalists"])
-    print("\nBest setup per family (development score):")
-    print(best[["family", "setup", "dev_ic_mean", "dev_ic_t_nw"]].to_string(index=False))
+    print(f"\nSetups positive in all {len(cuts) + 1} development blocks: "
+          f"{len(qualified)} of {len(log)}")
+    if len(finalists) < ms["n_finalists"]:
+        print(f"Only {len(finalists)} famil{'y' if len(finalists) == 1 else 'ies'} "
+              "have a consistent setup.")
+    print("\nBest consistent setup per family (development score, by block):")
+    print(best[["family", "setup", "dev_ic_mean", "block1_ic", "block2_ic", "block3_ic"]]
+          .round(4).to_string(index=False))
     print(f"\nFinalists by rule MS3: {', '.join(finalists['family'])}")
     if stage == "search":
         print("Stage 1 done. Holdout not touched; run with --stage final once, at the end.")
@@ -170,9 +221,11 @@ def main() -> None:
         f = pd.read_parquet(fc_dir / f"{r['setup']}.parquet")
         fc_final[r["setup"]] = f
         mh = forecast_metrics(f.loc[hold], realized.loc[hold], hm.loc[hold], ml["quantiles"])
+        ic_h = rank_ic(f.loc[hold], realized.loc[hold])
         rows.append({"setup": r["setup"], "dev_ic": r["dev_ic_mean"], "dev_ic_t": r["dev_ic_t_nw"],
                      "hold_ic": mh["ic_mean"], "hold_ic_t": mh["ic_t_nw"],
-                     "hold_r2_vs_hist_mean": mh["r2_vs_hist_mean"]})
+                     "hold_r2_vs_hist_mean": mh["r2_vs_hist_mean"],
+                     **{f"hold_ic_{y}": v for y, v in ic_h.groupby(ic_h.index.year).mean().items()}})
         strategies[f"S6 {r['family']} (search)"] = black_litterman_strategy(
             f, None, stocks, cfg, g, "A", tau)
     fin = pd.DataFrame(rows)
