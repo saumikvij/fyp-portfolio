@@ -142,7 +142,8 @@ model_search:                  # MS1–MS3 in DECISIONS.md (fixed before running
                max_dd_1y, dist_52w, sector_rev_1m, overnight_1m]
     wide:
       KNN: {n_neighbors: [20, 50, 100, 200, 500, 1000], weights: [uniform, distance]}
-      MLP: {hidden_layers: [[16], [32, 16], [64, 32], [64, 32, 16]], alphas: [1.0e-5, 1.0e-3, 1.0e-1]}
+      MLP: {hidden_layers: [[16], [32, 16], [64, 32], [64, 32, 16], [128, 64, 32, 16],
+                           [64, 64, 64, 64]], alphas: [1.0e-5, 1.0e-3, 1.0e-1]}
       LightGBM: {num_leaves: [3, 7, 15, 31], min_child_samples: [50, 150, 400]}
       Hist gradient boosting: {max_depth: [2, 3, 5], learning_rate: [0.01, 0.05, 0.1],
                                min_samples_leaf: [50, 200]}
