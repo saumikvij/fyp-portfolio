@@ -158,6 +158,9 @@ model_search:                  # MS1–MS3 in DECISIONS.md (fixed before running
       knn: {n_neighbors: [200, 1000]}
       quantile_regression: {alpha: [0.0], max_rows: 25000}
     out_dir: data/ml/search_wide
+    portfolio:                 # WU4
+      w_max: 0.02
+      cov_method: ledoit_wolf
   out_dir: data/ml/search      # forecasts of every setup (git-ignored)
 
 phase3:

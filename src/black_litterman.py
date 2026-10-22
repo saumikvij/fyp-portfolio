@@ -21,7 +21,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from src.estimators import sample_covariance
+from src.estimators import covariance
 
 
 # --------------------------------------------------------------------------- prior
@@ -298,8 +298,9 @@ def bl_inputs(hist, forecasts: pd.DataFrame, ensemble_var: pd.DataFrame | None,
     """
     bl = cfg["black_litterman"]
     t = hist.t
-    Sigma = sample_covariance(hist.returns_daily[stocks], t, cfg["backtest"]["cov_window_days"],
-                              cfg["data"]["trading_days_per_year"] / 12)
+    Sigma = covariance(hist.returns_daily[stocks], t, cfg["backtest"]["cov_window_days"],
+                       cfg["data"]["trading_days_per_year"] / 12,
+                       cfg["backtest"].get("cov_method", "sample"))
     w_mkt = market_weights(hist.close.loc[t, stocks], hist.shares[stocks])
     Pi = implied_prior(Sigma, w_mkt, bl["delta"])
     Q = forecasts.loc[t, stocks]

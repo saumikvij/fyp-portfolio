@@ -85,3 +85,21 @@ def test_real_covariance_is_positive_definite():
     for t in d["returns_monthly"].index[12::12]:
         S = sample_covariance(rets, t, CFG["backtest"]["cov_window_days"], DAYS_PER_MONTH)
         assert np.linalg.eigvalsh(S.values).min() > 0, t
+
+
+def test_O2_ledoit_wolf_is_pd_and_better_conditioned():
+    """O2: with more stocks than days the sample covariance is singular; Ledoit–Wolf is
+    positive definite and better conditioned."""
+    from src.estimators import covariance, ledoit_wolf_covariance
+    rng = np.random.default_rng(0)
+    idx = pd.bdate_range("2020-01-01", periods=120)
+    f = rng.normal(0, 0.01, (120, 1))
+    X = pd.DataFrame(f @ rng.uniform(0.5, 1.5, (1, 200)) + rng.normal(0, 0.01, (120, 200)),
+                     index=idx)
+    t = idx[-1]
+    S = sample_covariance(X, t, 100, 21).values
+    L = ledoit_wolf_covariance(X, t, 100, 21).values
+    assert np.linalg.eigvalsh(S).min() < 1e-12                     # singular (200 > 100)
+    eig = np.linalg.eigvalsh(L)
+    assert eig.min() > 0
+    assert covariance(X, t, 100, 21).equals(sample_covariance(X, t, 100, 21))   # default

@@ -493,3 +493,17 @@ Unchanged and already documented: survivorship bias (D0.2, approved A1), current
 - **Portfolios (total return / largest daily-path drawdown):** BL with any of the four models −15% / 37.5–37.8%; BL prior only −15% / 40.0%; SPY −20% / 52.3%; Markowitz −23% / 47.2%; 1/N −3% / 45.8%.
 - **Reading:** the Black–Litterman portfolios cut the worst fall by about 14 points against SPY and 8 against 1/N; the ML views change almost nothing relative to the prior. 1/N's small total loss is driven by the 2009 rebound of stocks known to have survived (e.g. BAC, WFC): survivorship bias is strongest exactly here, so 1/N's crisis return should not be read as a real advantage.
 - Outputs: `report/experiments/crisis_results.csv`, `crisis_wealth.png`.
+
+### WU4 Wide-universe portfolio experiment (designed 22 Oct, before any wide portfolio result)
+- **Purpose:** decide, with evidence, whether to move the main project from 51 to ~1,050 stocks.
+- **Universe:** the 1,052 wide-universe stocks (WU1), minus any without a share count for market caps.
+- **Risk matrix:** Ledoit–Wolf shrinkage of the trailing 252-day daily covariance (shrinks toward a scaled identity), × 21 to monthly. Needed because the sample covariance of 1,052 stocks from 252 days is singular; Ledoit–Wolf is always positive definite (plan item O2).
+- **Weight cap 2% per stock** (instead of 10%): with 1,052 stocks, a 10% cap would allow a 10-stock portfolio, which defeats the point; 2% forces at least 50 holdings.
+- **Strategies, monthly, Dec 2015 – Jul 2026, 10 bps, γ = 5:** 1/N over all stocks; SPY; minimum variance (Ledoit–Wolf); Black–Litterman prior only; Black–Litterman with Ω-A and views from the wide-search setup chosen by the pre-set rule (MS3 + MS5 on development scores only).
+- **Reported:** Sharpe, return, volatility, drawdown, turnover, for the development (2016–2021) and holdout (2022–2026) parts separately, next to the 51-stock results.
+- **Decision rule for the student:** propose switching to the advisor only if the wide BL portfolios clearly beat their 51-stock counterparts in both parts.
+
+### MS14 IPCA added after the holdout run (22 Oct; student's request after the literature search)
+- **Model:** instrumented PCA (Kelly, Pruitt & Su 2019): r_{i,t+1} = z_{i,t}ᵀ Γ f_{t+1} + ε, where z are the stock's (ranked) signals plus a constant, Γ (L × K) maps signals to K factor loadings, and f are latent factor returns. Estimated by alternating least squares (Γ given f, f given Γ), written from the paper rather than taken from the `ipca` package (keeps the environment unchanged). Forecast for t+1 = z_{i,t}ᵀ Γ λ, with λ the average estimated factor return over the training window (the usual predictive use).
+- **Tuning:** K ∈ {1, 2, 3, 5} by validation MSE on the chronological validation months, like every other model; same windows, targets and signal sets as the main grid (30 setups).
+- **Status:** because the holdout was already used once (MS12), IPCA's holdout result is reported in full but flagged as obtained after that look; it cannot replace the MS12 conclusion on its own.

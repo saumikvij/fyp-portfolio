@@ -89,3 +89,41 @@ def condition_number(Sigma: pd.DataFrame) -> float:
     if eig[0] <= 0:
         raise ValueError(f"Σ is not positive definite (λ_min = {eig[0]:.3g})")
     return float(eig[-1] / eig[0])
+
+
+def ledoit_wolf_covariance(returns_daily: pd.DataFrame, t: pd.Timestamp, window: int,
+                           days_per_month: float) -> pd.DataFrame:
+    """Ledoit–Wolf shrinkage covariance over a trailing window, scaled to monthly.
+
+    Σ_LW = (1 − ρ) S + ρ·μ̂ I, with the shrinkage intensity ρ chosen by the
+    Ledoit–Wolf (2004) formula. Always positive definite, also when there are more
+    stocks than days (EXPERIMENT, DECISIONS WU4).
+
+    Parameters
+    ----------
+    returns_daily, t, window, days_per_month : as in ``sample_covariance``.
+
+    Returns
+    -------
+    DataFrame (ticker x ticker).
+
+    Theorem: O2 (Ledoit–Wolf is positive definite and better conditioned).
+    """
+    from sklearn.covariance import LedoitWolf
+
+    hist = returns_daily.loc[:t]
+    if len(hist) < window:
+        raise ValueError(f"Only {len(hist)} days before {t.date()}, need {window}")
+    x = hist.iloc[-window:]
+    lw = LedoitWolf().fit(x.values)
+    return pd.DataFrame(lw.covariance_ * days_per_month, index=x.columns, columns=x.columns)
+
+
+def covariance(returns_daily: pd.DataFrame, t: pd.Timestamp, window: int,
+               days_per_month: float, method: str = "sample") -> pd.DataFrame:
+    """Dispatch to ``sample_covariance`` (default) or ``ledoit_wolf_covariance``."""
+    if method == "sample":
+        return sample_covariance(returns_daily, t, window, days_per_month)
+    if method == "ledoit_wolf":
+        return ledoit_wolf_covariance(returns_daily, t, window, days_per_month)
+    raise ValueError(f"Unknown covariance method {method!r}")

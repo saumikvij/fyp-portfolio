@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 
 from src.black_litterman import bl_inputs
-from src.estimators import historical_mean, sample_covariance
+from src.estimators import covariance, historical_mean, sample_covariance
 from src.optimization import Constraints, mean_variance, min_variance
 
 
@@ -248,9 +248,9 @@ def buy_and_hold(ticker: str) -> Strategy:
 
 
 def _sigma(hist: History, stocks: list[str], cfg: dict) -> pd.DataFrame:
-    return sample_covariance(hist.returns_daily[stocks], hist.t,
-                             cfg["backtest"]["cov_window_days"],
-                             cfg["data"]["trading_days_per_year"] / 12)
+    return covariance(hist.returns_daily[stocks], hist.t, cfg["backtest"]["cov_window_days"],
+                      cfg["data"]["trading_days_per_year"] / 12,
+                      cfg["backtest"].get("cov_method", "sample"))
 
 
 def _constraints(hist: History, cfg: dict) -> Constraints:

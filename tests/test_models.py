@@ -352,3 +352,21 @@ def test_classifier_model_and_shuffle(panel, dates):
     g1 = sh.groupby(level="date")["target"].apply(lambda x: sorted(x.dropna()))
     assert (g0 == g1).all()                                   # same values each month
     assert not np.allclose(panel["target"].fillna(0), sh["target"].fillna(0))
+
+
+def test_ipca_recovers_planted_factor_premium():
+    """Returns = (loading from signals) × factor with positive mean: IPCA forecasts rank well."""
+    from src.experiment_models import IPCAModel
+    rng = np.random.default_rng(3)
+    dates = pd.date_range("2012-01-31", periods=90, freq="ME")
+    idx = pd.MultiIndex.from_product([dates, [f"S{i}" for i in range(40)]], names=["date", "ticker"])
+    X = pd.DataFrame(rng.uniform(-0.5, 0.5, (len(idx), len(FEATURES))), index=idx, columns=FEATURES)
+    f = pd.Series(rng.normal(0.02, 0.03, len(dates)), index=dates)
+    X["target"] = X["mom_12_1"].values * f.reindex(X.index.get_level_values("date")).values \
+        + rng.normal(0, 0.02, len(idx))
+    nxt = dict(zip(dates[:-1], dates[1:]))
+    X["target_date"] = [nxt.get(d, pd.NaT) for d in idx.get_level_values("date")]
+    fdates = dates[48:-1]
+    res = walk_forward(IPCAModel({"K": [1, 2]}, CFG["seed"]), X, fdates, 12, 12)
+    assert rank_ic(res.forecasts, X.loc[fdates, "target"].unstack()).mean() > 0.2
+    assert (res.log["last_target_date"] <= res.log["retrain_date"]).all()

@@ -104,3 +104,85 @@ class SubsampledRegressor:
 
     def predict(self, X):
         return self.base.predict(X)
+
+
+@dataclass
+class IPCAModel:
+    """Instrumented PCA (Kelly, Pruitt & Su 2019) as a return forecaster (MS14).
+
+    r_{i,t+1} = z_{i,t}ᵀ Γ f_{t+1} + ε, z = signals + constant. Alternating least squares:
+    f_t = (ΓᵀZ_tᵀZ_tΓ)⁻¹ ΓᵀZ_tᵀ r_t for each month, then vec(Γ) from
+    Σ_t (Z_tᵀZ_t ⊗ f_t f_tᵀ) vec(Γ) = Σ_t (Z_tᵀ r_t ⊗ f_t). Forecast = z ᵀ Γ λ with λ the
+    mean factor return in training. K (number of factors) is tuned on validation MSE.
+    """
+
+    grid: dict
+    seed: int
+    retrain_every: int = 12
+    name: str = "IPCA"
+    features: list[str] = field(default_factory=lambda: list(FEATURES))
+    tuned: bool = True
+    params_: dict = field(default_factory=dict)
+    max_iter: int = 200
+    tol: float = 1e-6
+
+    def _design(self, df: pd.DataFrame) -> np.ndarray:
+        return np.column_stack([df[self.features].values, np.ones(len(df))])
+
+    def _fit(self, K: int, train: pd.DataFrame):
+        Z = self._design(train)
+        r = train["target"].values
+        groups = list(train.groupby(level="date").indices.values())
+        L = Z.shape[1]
+        # Initialise Γ from the characteristic-managed portfolios X_t = Z_tᵀ r_t / N_t.
+        X = np.column_stack([Z[g].T @ r[g] / len(g) for g in groups])
+        U, _, _ = np.linalg.svd(X, full_matrices=False)
+        G = U[:, :K]
+        F = np.zeros((len(groups), K))
+        for _ in range(self.max_iter):
+            for j, g in enumerate(groups):
+                ZG = Z[g] @ G
+                F[j] = np.linalg.lstsq(ZG, r[g], rcond=None)[0]
+            A = np.zeros((L * K, L * K))
+            b = np.zeros(L * K)
+            for j, g in enumerate(groups):
+                ZZ = Z[g].T @ Z[g]
+                A += np.kron(ZZ, np.outer(F[j], F[j]))
+                b += np.kron(Z[g].T @ r[g], F[j])
+            G_new = np.linalg.lstsq(A, b, rcond=None)[0].reshape(L, K)
+            # Normalise: Γ orthonormal (factors rescaled accordingly).
+            Q, R = np.linalg.qr(G_new)
+            G_new, F = Q, F @ R.T
+            done = np.max(np.abs(G_new - G)) < self.tol
+            G = G_new
+            if done:
+                break
+        return G, F.mean(axis=0)
+
+    def _predict(self, fitted, df: pd.DataFrame) -> np.ndarray:
+        G, lam = fitted
+        return self._design(df) @ G @ lam
+
+    def tune(self, tune_set: pd.DataFrame, val_set: pd.DataFrame) -> dict:
+        best = None
+        for K in self.grid["K"]:
+            pred = self._predict(self._fit(K, tune_set), val_set)
+            mse = float(np.mean((pred - val_set["target"].values) ** 2))
+            if best is None or mse < best["val_mse"]:
+                best = {"K": K, "val_mse": mse}
+        return best
+
+    def fit(self, train: pd.DataFrame) -> None:
+        self.fitted_ = self._fit(self.params_["K"], train)
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        return self._predict(self.fitted_, X)
+
+    def predict_array(self, X: np.ndarray) -> np.ndarray:
+        G, lam = self.fitted_
+        return np.column_stack([X, np.ones(len(X))]) @ G @ lam
+
+    def clone(self, seed: int) -> "IPCAModel":
+        c = copy.deepcopy(self)
+        c.seed = seed
+        return c

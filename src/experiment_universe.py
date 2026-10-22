@@ -87,3 +87,28 @@ def load_wide() -> dict:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     build_wide(load_config())
+
+
+def wide_shares(tickers: list[str], force: bool = False) -> pd.DataFrame:
+    """All-class share counts for the wide universe (impliedSharesOutstanding, falling
+    back to sharesOutstanding); tickers with neither are left out (WU4)."""
+    import yfinance as yf
+
+    path = WIDE / "processed" / "shares_outstanding.csv"
+    if path.exists() and not force:
+        return pd.read_csv(path, index_col="ticker")
+    rows = []
+    for i, t in enumerate(tickers, 1):
+        try:
+            info = yf.Ticker(t).info
+            n = info.get("impliedSharesOutstanding") or info.get("sharesOutstanding")
+        except Exception:                                   # network / missing quote
+            n = None
+        if n:
+            rows.append({"ticker": t, "shares_outstanding": int(n)})
+        if i % 100 == 0:
+            logger.info("shares: %d / %d", i, len(tickers))
+    out = pd.DataFrame(rows).set_index("ticker")
+    out.to_csv(path)
+    logger.info("Share counts for %d of %d stocks", len(out), len(tickers))
+    return out
