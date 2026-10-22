@@ -72,7 +72,10 @@ def main():
                 row[f"{lab}_ic"] = summarize_series(rank_ic(f.loc[part], yy.loc[part]))["mean"]
         for lab, seg in (("dev", net.loc[:split]), ("hold", net.loc[split:].iloc[1:])):
             row[f"{lab}_sharpe"] = performance_summary(seg, rf)["sharpe"]
+        row["dev_return"] = performance_summary(net.loc[:split], rf)["ann_return"]
         row["hold_return"] = performance_summary(net.loc[split:].iloc[1:], rf)["ann_return"]
+        row["all_return"] = performance_summary(net, rf)["ann_return"]
+        row["growth_10k"] = float(10_000 * (1 + net).prod())
         row["hold_max_dd"] = max_drawdown(net.loc[split:].iloc[1:])
         row["turnover"] = float(res.turnover.iloc[1:].mean())
         rows.append(row)
