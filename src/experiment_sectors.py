@@ -81,3 +81,49 @@ def sector_bl_strategy(sector_fc: pd.DataFrame, sret: pd.DataFrame, stocks: list
         return mean_variance(pd.Series(mu, index=stocks), Sigma, gamma, _constraints(hist, cfg),
                              cfg["optimization"]["solver"]).weights
     return strategy
+
+
+def combined_bl_strategy(stock_views: dict[str, pd.DataFrame], sector_fc: pd.DataFrame | None,
+                         sret: pd.DataFrame | None, stocks: list[str], cfg: dict, gamma: float,
+                         tau: float, vol_fc: pd.DataFrame | None = None):
+    """Black–Litterman with several view sets stacked in one P (general-P form of T6; WU7).
+
+    Rows of P: one per sector (if ``sector_fc`` is given, as in ``sector_bl_strategy``),
+    then an identity block for each stock-level forecast in ``stock_views``. Q stacks the
+    forecasts; Ω is diagonal, each view's Ω-A computed from its own past errors (D4.4).
+    Σ is the trailing sample Σ, or Σ = D·R·D with ML volatilities when ``vol_fc`` is given.
+    """
+    from src.experiment_vol import dr_covariance
+
+    bl = cfg["black_litterman"]
+    dpm = cfg["data"]["trading_days_per_year"] / 12
+
+    def strategy(hist: History) -> pd.Series:
+        t = hist.t
+        Sigma = (_sigma(hist, stocks, cfg) if vol_fc is None else
+                 dr_covariance(hist, stocks, vol_fc, cfg["backtest"]["cov_window_days"], dpm))
+        w_mkt = market_weights(hist.close.loc[t, stocks], hist.shares[stocks])
+        Pi = implied_prior(Sigma, w_mkt, bl["delta"])
+        Ps, Qs, Oms = [], [], []
+        if sector_fc is not None:
+            names = list(sector_fc.columns)
+            P = sector_matrix(stocks, hist.sectors, names)
+            keep = P.sum(axis=1) > 0
+            P, names = P[keep], [n for n, k in zip(names, keep) if k]
+            errors = forecast_errors(sector_fc.loc[sector_fc.index < t, names], sret.loc[:t, names])
+            var = pd.Series(np.diag(P @ Sigma.values @ P.T), index=names)
+            Ps.append(P)
+            Qs.append(sector_fc.loc[t, names].values)
+            Oms.append(omega_a(errors, var, bl["omega_a_window"], bl["omega_a_prior_months"]).values)
+        excess = hist.returns_monthly[stocks].sub(hist.rf_monthly, axis=0)
+        var = pd.Series(np.diag(Sigma.values), index=stocks)
+        for f in stock_views.values():
+            errors = forecast_errors(f.loc[f.index < t, stocks], excess)
+            Ps.append(np.eye(len(stocks)))
+            Qs.append(f.loc[t, stocks].values)
+            Oms.append(omega_a(errors, var, bl["omega_a_window"], bl["omega_a_prior_months"]).values)
+        mu = Pi.values if not Ps else posterior_mean(Pi.values, Sigma.values, tau, np.concatenate(Qs),
+                                                     np.concatenate(Oms), np.vstack(Ps))
+        return mean_variance(pd.Series(mu, index=stocks), Sigma, gamma, _constraints(hist, cfg),
+                             cfg["optimization"]["solver"]).weights
+    return strategy

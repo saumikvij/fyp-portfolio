@@ -1,0 +1,19 @@
+strategy,period,sharpe_diff,boot_p,boot_p_holm
+"No AI views (prior), ML Σ",dev,-0.019225598366343476,0.7086,1.0
+"No AI views (prior), ML Σ",hold,-0.10197935207498159,0.1721,1.0
+"No AI views (prior), ML Σ",all,-0.056248922547028096,0.2083,1.0
+Rotation only,dev,-0.060875059370206354,0.5325,1.0
+Rotation only,hold,0.013844202390337405,0.8581,1.0
+Rotation only,all,-0.020226008050619887,0.7618,1.0
+LightGBM only,dev,-0.035850305072674414,0.7415,1.0
+LightGBM only,hold,-0.13596332597428637,0.0929,1.0
+LightGBM only,all,-0.070139767124112,0.3099,1.0
+Rotation + LightGBM,dev,-0.04253205302414282,0.7669,1.0
+Rotation + LightGBM,hold,-0.12973401540253365,0.2771,1.0
+Rotation + LightGBM,all,-0.06990120294465489,0.4407,1.0
+"Rotation + LightGBM, ML Σ",dev,-0.0024530329008756796,0.9847,1.0
+"Rotation + LightGBM, ML Σ",hold,-0.06130787011718425,0.6517,1.0
+"Rotation + LightGBM, ML Σ",all,-0.01987638884106289,0.823,1.0
+"Rotation + LightGBM + IPCA, ML Σ",dev,0.03784504239871807,0.8226,1.0
+"Rotation + LightGBM + IPCA, ML Σ",hold,-0.1246786547008644,0.4202,1.0
+"Rotation + LightGBM + IPCA, ML Σ",all,-0.025319019775261655,0.8144,1.0
