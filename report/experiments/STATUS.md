@@ -13,7 +13,10 @@ Design and every decision: DECISIONS.md, sections MS1–MS10 and WU1.
 
 ## Not done yet (in this order)
 1. Weekly test (E1).
-2. Wider-universe portfolio with Ledoit–Wolf, only if wide forecasts show anything.
+
+Done 22 Oct (round 5, MS15): learning to rank, industry rotation, ML volatility (the one
+out-of-sample win, for risk), Black–Litterman with the ML risk matrix, IPCA, and the
+wide-universe portfolios (keep 51 stocks as the main universe).
 
 Done 22 Oct: final exam on 2022–2026 (MS12) and the 2008–2009 crisis test (MS13).
 
