@@ -186,3 +186,74 @@ class IPCAModel:
         c = copy.deepcopy(self)
         c.seed = seed
         return c
+
+
+@dataclass
+class RankerModel:
+    """Learning to rank (LambdaMART via LightGBM ``lambdarank``), MS15 strategy 1.
+
+    Trained to order stocks within each month; labels are next-month return quintiles
+    (0–4). The score becomes a return forecast a + k·score, with a = mean training
+    target and k = least-squares slope of the training target on the score.
+    """
+
+    grid: dict
+    seed: int
+    retrain_every: int = 12
+    name: str = "LTR"
+    features: list[str] = field(default_factory=lambda: list(FEATURES))
+    tuned: bool = True
+    params_: dict = field(default_factory=dict)
+    n_levels: int = 5
+
+    def _labels_groups(self, df: pd.DataFrame):
+        df = df.sort_index(level="date", sort_remaining=False)
+        q = df.groupby(level="date")["target"].transform(
+            lambda x: pd.qcut(x.rank(method="first"), self.n_levels, labels=False))
+        groups = df.groupby(level="date", sort=False).size().values
+        return df, q.astype(int).values, groups
+
+    def _fit(self, params: dict, train: pd.DataFrame):
+        import lightgbm as lgb
+        df, y, groups = self._labels_groups(train)
+        m = lgb.LGBMRanker(objective="lambdarank", learning_rate=0.05, min_child_samples=50,
+                           subsample=0.8, subsample_freq=1, colsample_bytree=0.8,
+                           random_state=self.seed, deterministic=True, force_row_wise=True,
+                           n_jobs=1, verbose=-1, **params)
+        m.fit(df[self.features].values, y, group=groups)
+        s = m.predict(df[self.features].values)
+        s = (s - s.mean()) / (s.std() or 1.0)
+        tgt = df["target"].values
+        a = float(tgt.mean())
+        k = float(s @ (tgt - a) / (s @ s)) if s @ s > 0 else 0.0
+        return m, a, k, s.mean(), s.std()
+
+    def _predict(self, fitted, X: np.ndarray) -> np.ndarray:
+        m, a, k, _, _ = fitted
+        s = m.predict(X)
+        s = (s - s.mean()) / (s.std() or 1.0)            # standardize within the month
+        return a + k * s
+
+    def tune(self, tune_set: pd.DataFrame, val_set: pd.DataFrame) -> dict:
+        keys, best = list(self.grid), None
+        for values in product(*(self.grid[k] for k in keys)):
+            params = dict(zip(keys, values))
+            f = self._fit(params, tune_set)
+            pred = np.concatenate([self._predict(f, g[self.features].values)
+                                   for _, g in val_set.groupby(level="date")])
+            truth = np.concatenate([g["target"].values for _, g in val_set.groupby(level="date")])
+            mse = float(np.mean((pred - truth) ** 2))
+            if best is None or mse < best["val_mse"]:
+                best = {**params, "val_mse": mse}
+        return best
+
+    def fit(self, train: pd.DataFrame) -> None:
+        self.fitted_ = self._fit(self.params_, train)
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        return self._predict(self.fitted_, X[self.features].values)
+
+    def clone(self, seed: int) -> "RankerModel":
+        c = copy.deepcopy(self)
+        c.seed = seed
+        return c

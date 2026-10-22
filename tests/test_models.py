@@ -370,3 +370,12 @@ def test_ipca_recovers_planted_factor_premium():
     res = walk_forward(IPCAModel({"K": [1, 2]}, CFG["seed"]), X, fdates, 12, 12)
     assert rank_ic(res.forecasts, X.loc[fdates, "target"].unstack()).mean() > 0.2
     assert (res.log["last_target_date"] <= res.log["retrain_date"]).all()
+
+
+def test_ranker_recovers_planted_ranking_signal():
+    from src.experiment_models import RankerModel
+    X, fdates = planted_panel(lambda d: 0.04 * d["mom_12_1"])
+    res = walk_forward(RankerModel({"num_leaves": [7], "n_estimators": [100]}, CFG["seed"]),
+                       X, fdates, 12, 12)
+    assert rank_ic(res.forecasts, X.loc[fdates, "target"].unstack()).mean() > 0.3
+    assert (res.log["last_target_date"] <= res.log["retrain_date"]).all()
