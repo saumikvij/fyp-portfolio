@@ -15,7 +15,8 @@ from src.backtest import black_litterman_strategy, history_at, rebalance_dates, 
 from src.data import load_config, load_processed
 from src.estimators import sample_covariance
 from src.experiment_vol import dr_covariance
-from src.metrics import max_drawdown, performance_summary
+from src.metrics import (holm_adjust, max_drawdown, performance_summary,
+                         sharpe_difference_bootstrap, sharpe_difference_memmel)
 
 OUT = Path("report/experiments")
 TARGET = 0.10
@@ -50,7 +51,7 @@ def main() -> None:
 
     gross, turnover = base.gross, base.turnover
     split = me[me > pd.Timestamp(cfg["model_search"]["dev_end"])][0]
-    rows = {}
+    rows, nets = {}, {}
     variants = {"No scaling": pd.Series(1.0, index=dates)}
     for k, v in pred.items():
         variants[f"Target 10%, {k}"] = pd.Series(v).clip(lower=1e-6).rdiv(TARGET).clip(upper=1.0)
@@ -59,6 +60,7 @@ def main() -> None:
         ds = s_hold.diff().abs().fillna(s_hold.iloc[0])
         net = s_hold * gross + (1 - s_hold) * rf.reindex(gross.index) \
             - c * (s_hold * turnover + ds)
+        nets[name] = net
         row = {"avg_exposure": float(s_hold.mean())}
         for label, seg in (("dev", net.loc[:split]), ("hold", net.loc[split:].iloc[1:])):
             p = performance_summary(seg, rf)
@@ -72,6 +74,27 @@ def main() -> None:
     print("BL prior portfolio, 51 stocks, γ = 5, 10 bps (holdout = post-holdout).")
     print("vol_miss = average gap between 12-month realized volatility and the 10% target.")
     print(t.round(3).to_string())
+
+    # Paired Sharpe-difference tests (block bootstrap + Memmel), Holm over the family.
+    p2 = cfg["phase2"]
+    ml = "Target 10%, ML Σ"
+    tests = []
+    for other in ["No scaling", "Target 10%, sample Σ", "Target 10%, last month realized"]:
+        for label, sl in (("dev", slice(None, split)), ("hold", slice(split, None)),
+                          ("all", slice(None, None))):
+            a, b = nets[ml].loc[sl], nets[other].loc[sl]
+            if label == "hold":
+                a, b = a.iloc[1:], b.iloc[1:]
+            boot = sharpe_difference_bootstrap(a, b, rf, block=p2["sharpe_test_block"],
+                                               n_boot=p2["sharpe_test_boot"], seed=cfg["seed"])
+            tests.append({"vs": other, "period": label, "sharpe_diff": boot["diff"],
+                          "ci_lo": boot["ci_lo"], "ci_hi": boot["ci_hi"], "boot_p": boot["p_value"],
+                          "memmel_p": sharpe_difference_memmel(a, b, rf)["p_value"]})
+    tests = pd.DataFrame(tests)
+    tests["boot_p_holm"] = holm_adjust(tests["boot_p"])
+    tests.to_csv(OUT / "voltarget_tests.csv", index=False)
+    print(f"\nPaired tests: {ml} minus each alternative (annualized Sharpe difference):")
+    print(tests.round(3).to_string(index=False))
 
 
 if __name__ == "__main__":
