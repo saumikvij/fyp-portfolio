@@ -70,3 +70,37 @@ def min_var_with(vol_fc: pd.DataFrame, stocks: list[str], cfg: dict):
                           cfg["data"]["trading_days_per_year"] / 12)
         return min_variance(S, _constraints(hist, cfg), cfg["optimization"]["solver"]).weights
     return strategy
+
+
+def bl_with_vol_sigma(vol_fc: pd.DataFrame, forecasts: pd.DataFrame, stocks: list[str],
+                      cfg: dict, gamma: float, tau: float, views: bool = True):
+    """Black–Litterman (Ω-A, P = I) where Σ = D·R·D uses ML volatility forecasts (MS15.5).
+
+    Σ enters everywhere Black–Litterman uses it: the prior Π = δΣw_mkt, the posterior
+    (T6) and the mean-variance step. Ω-A is computed exactly as in Phase 4, with the
+    return variance taken from the diagonal of this Σ.
+    """
+    from src.black_litterman import (forecast_errors, implied_prior, market_weights, omega_a,
+                                     posterior_mean)
+    from src.optimization import mean_variance
+
+    bl = cfg["black_litterman"]
+    dpm = cfg["data"]["trading_days_per_year"] / 12
+
+    def strategy(hist: History) -> pd.Series:
+        t = hist.t
+        Sigma = dr_covariance(hist, stocks, vol_fc, cfg["backtest"]["cov_window_days"], dpm)
+        w_mkt = market_weights(hist.close.loc[t, stocks], hist.shares[stocks])
+        Pi = implied_prior(Sigma, w_mkt, bl["delta"])
+        mu = Pi
+        if views:
+            excess = hist.returns_monthly[stocks].sub(hist.rf_monthly, axis=0)
+            err = forecast_errors(forecasts.loc[forecasts.index < t, stocks], excess)
+            om = omega_a(err, pd.Series(np.diag(Sigma.values), index=stocks),
+                         bl["omega_a_window"], bl["omega_a_prior_months"])
+            mu = pd.Series(posterior_mean(Pi.values, Sigma.values, tau,
+                                          forecasts.loc[t, stocks].values, om.values),
+                           index=stocks)
+        return mean_variance(mu, Sigma, gamma, _constraints(hist, cfg),
+                             cfg["optimization"]["solver"]).weights
+    return strategy
