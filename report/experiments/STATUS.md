@@ -12,10 +12,10 @@ Design and every decision: DECISIONS.md, sections MS1–MS10 and WU1.
 - Wide universe done: 60 setups + 36 placebo (see DECISIONS MS11).
 
 ## Not done yet (in this order)
-1. Weekly test (E1), planned for 18 Oct.
-2. Final exam on 2022–2026, once: `python -m notebooks.model_search --stage final`.
-3. Bonus 2008–2009 crisis stress test (MS10).
-4. Wider-universe portfolio with Ledoit–Wolf, only if wide forecasts show anything.
+1. Weekly test (E1).
+2. Wider-universe portfolio with Ledoit–Wolf, only if wide forecasts show anything.
+
+Done 22 Oct: final exam on 2022–2026 (MS12) and the 2008–2009 crisis test (MS13).
 
 Results logs: `report/experiments/search_log.csv`, `placebo_log.csv`, `wide_search_log.csv`.
 The holdout (forecasts made in 2022–2026) has not been looked at for any new setup.

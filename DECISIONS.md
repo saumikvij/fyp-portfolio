@@ -486,3 +486,10 @@ Unchanged and already documented: survivorship bias (D0.2, approved A1), current
   All three have holdout R²_oos below the historical-mean baseline.
 - **Portfolios (S6, γ = 5, 10 bps), holdout Sharpe:** kernel ridge 0.54, KNN 0.53, LightGBM 0.53, original Phase 4 S6 0.50, 1/N 0.53, S4 0.30, **BL prior only 0.63**.
 - **Conclusion:** after ~900 setups (15 families, 5 windows, 2 targets, 4 signal sets, wide grids, 2 universes), no reliable predictive benefit was detected under the tested conditions. The finalists' development scores were inflated by the number of setups tried and by choosing the risk signal set on the same data (MS8), exactly as the placebo and the design anticipated; the holdout removed the inflation. The main conclusion of Phase 4 is unchanged: Black–Litterman protects the portfolio, and with views that show no reliable predictive benefit, staying near the market prior does best.
+
+### MS13 2008–2009 crisis stress test result (22 Oct 2026)
+- 50 of the 51 stocks (GOOGL listed in 2004); models retrained by walk-forward on data from 2001; decisions Dec 2007 – Nov 2009, holding Jan 2008 – Dec 2009; γ = 5, 10 bps.
+- **Forecasts during the crisis:** rank IC original elastic net −0.091 (t −1.5), kernel ridge +0.036, KNN +0.002, LightGBM +0.013 (all |t| < 0.6). No reliable predictive benefit in the crisis either.
+- **Portfolios (total return / largest daily-path drawdown):** BL with any of the four models −15% / 37.5–37.8%; BL prior only −15% / 40.0%; SPY −20% / 52.3%; Markowitz −23% / 47.2%; 1/N −3% / 45.8%.
+- **Reading:** the Black–Litterman portfolios cut the worst fall by about 14 points against SPY and 8 against 1/N; the ML views change almost nothing relative to the prior. 1/N's small total loss is driven by the 2009 rebound of stocks known to have survived (e.g. BAC, WFC): survivorship bias is strongest exactly here, so 1/N's crisis return should not be read as a real advantage.
+- Outputs: `report/experiments/crisis_results.csv`, `crisis_wealth.png`.
