@@ -1,0 +1,27 @@
+IPCA on the wide universe:
+  ipca__expanding__raw__base               dev IC -0.0092 consistent False  (17s)
+  ipca__expanding__raw__niche              dev IC +0.0191 consistent True  (159s)
+  ipca__expanding__raw__risk               dev IC -0.0127 consistent False  (22s)
+  ipca__expanding__demeaned__base          dev IC -0.0137 consistent False  (29s)
+  ipca__expanding__demeaned__niche         dev IC -0.0007 consistent False  (66s)
+  ipca__expanding__demeaned__risk          dev IC -0.0096 consistent False  (22s)
+  ipca__roll60m__raw__base                 dev IC -0.0051 consistent False  (8s)
+  ipca__roll60m__raw__niche                dev IC -0.0064 consistent False  (64s)
+  ipca__roll60m__raw__risk                 dev IC -0.0215 consistent False  (8s)
+  ipca__roll60m__demeaned__base            dev IC -0.0041 consistent False  (10s)
+  ipca__roll60m__demeaned__niche           dev IC -0.0195 consistent False  (27s)
+  ipca__roll60m__demeaned__risk            dev IC -0.0246 consistent False  (9s)
+IPCA chosen on development data: ipca__expanding__raw__niche
+BL + IPCA                  done in    82s
+BL + Industry rotation     done in    79s
+
+              strategy  avg_turnover  avg_holdings  dev_return  dev_vol  dev_sharpe  dev_max_dd  dev_cvar95  hold_return  hold_vol  hold_sharpe  hold_max_dd  hold_cvar95  all_return  all_vol  all_sharpe  all_max_dd  all_cvar95  dev_acc_up_down  dev_acc_vs_median  hold_acc_up_down  hold_acc_vs_median
+             BL + IPCA         0.673       111.281       0.104    0.195       0.562       0.330       0.139        0.123     0.115        0.734        0.116        0.056       0.112    0.165       0.599       0.330       0.116            0.537              0.508             0.504                 0.5
+BL + Industry rotation         0.671       312.078       0.100    0.165       0.608       0.264       0.132        0.127     0.133        0.681        0.164        0.071       0.112    0.152       0.634       0.264       0.110              NaN                NaN               NaN                 NaN
+
+Paired Sharpe tests vs BL prior only (holdout = post-holdout):
+              strategy period  sharpe_diff  ci_lo  ci_hi  boot_p  boot_p_holm
+             BL + IPCA   hold        0.036 -0.409  0.468   0.864        1.000
+             BL + IPCA    all       -0.243 -0.539  0.010   0.078        0.233
+BL + Industry rotation   hold       -0.017 -0.184  0.154   0.835        1.000
+BL + Industry rotation    all       -0.209 -0.464 -0.043   0.051        0.205

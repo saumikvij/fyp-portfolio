@@ -1,6 +1,7 @@
 """EXPERIMENT (branch experiment/model-search): round-3 model styles (DECISIONS MS7).
 
-``ClassifierModel`` predicts whether a stock beats the month's median, then turns the
+``ClassifierModel`` predicts whether a stock beats the month's median (``label="median"``)
+or simply whether its excess return is positive (``label="sign"``, WU5), then turns the
 probability into a return forecast: forecast = a + k·(p − ½), where a is the average
 training target and k the least-squares slope of the training target on (p − ½), both
 fitted on the training rows only. Tuning and walk-forward are the same as for every
@@ -24,6 +25,10 @@ def _beats_median(df: pd.DataFrame) -> np.ndarray:
     return (df["target"] > med).astype(int).values
 
 
+def _is_up(df: pd.DataFrame) -> np.ndarray:
+    return (df["target"] > 0).astype(int).values
+
+
 @dataclass
 class ClassifierModel:
     """Any scikit-learn classifier with ``predict_proba``, used as a return forecaster."""
@@ -36,10 +41,11 @@ class ClassifierModel:
     features: list[str] = field(default_factory=lambda: list(FEATURES))
     tuned: bool = True
     params_: dict = field(default_factory=dict)
+    label: str = "median"
 
     def _fit(self, params: dict, train: pd.DataFrame):
-        clf = self.factory(**params, seed=self.seed).fit(train[self.features].values,
-                                                         _beats_median(train))
+        y_cls = _is_up(train) if self.label == "sign" else _beats_median(train)
+        clf = self.factory(**params, seed=self.seed).fit(train[self.features].values, y_cls)
         p = clf.predict_proba(train[self.features].values)[:, 1] - 0.5
         y = train["target"].values
         a = float(y.mean())

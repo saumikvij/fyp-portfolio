@@ -1,0 +1,98 @@
+Trained the up/down logistic classifier (logistic_updown__expanding__raw__base) in 1s
+Views used (best development IC per family):
+  MLP                      mlp__expanding__raw__niche
+  Random forest            random_forest__expanding__demeaned__base
+  LightGBM                 lightgbm__expanding__demeaned__base
+  Extra trees              extra_trees__expanding__demeaned__base
+  Hist gradient boosting   hist_gradient_boosting__expanding__demeaned__base
+  KNN                      knn__expanding__demeaned__base
+  Elastic net              elastic_net__expanding__raw__base
+  Kernel ridge             kernel_ridge__expanding__demeaned__base
+  PCA regression           pca_regression__expanding__raw__base
+  Naive Bayes classifier   naive_bayes_classifier__expanding__demeaned__base
+  Huber                    huber__expanding__demeaned__base
+  LightGBM classifier      lightgbm_classifier__expanding__demeaned__base
+  Linear SVR               linear_svr__expanding__demeaned__base
+  Quantile regression      quantile_regression__expanding__demeaned__base
+  Logistic classifier      logistic_classifier__expanding__raw__base
+[ 1/20] 1/N                                done in     0s
+[ 2/20] SPY                                done in     0s
+[ 3/20] BL prior only                      done in    71s
+[ 4/20] BL + MLP                           done in    70s
+[ 5/20] BL + Random forest                 done in    69s
+[ 6/20] BL + LightGBM                      done in    69s
+[ 7/20] BL + Extra trees                   done in    70s
+[ 8/20] BL + Hist gradient boosting        done in    69s
+[ 9/20] BL + KNN                           done in    74s
+[10/20] BL + Elastic net                   done in    78s
+[11/20] BL + Kernel ridge                  done in    79s
+[12/20] BL + PCA regression                done in    80s
+[13/20] BL + Naive Bayes classifier        done in    80s
+[14/20] BL + Huber                         done in    80s
+[15/20] BL + LightGBM classifier           done in    78s
+[16/20] BL + Linear SVR                    done in    78s
+[17/20] BL + Quantile regression           done in    71s
+[18/20] BL + Logistic classifier           done in    69s
+[19/20] BL + Average of 15 models          done in    73s
+[20/20] BL + Logistic (up vs down)         done in    70s
+
+Always guessing 'up': accuracy 54.8% (all months)
+
+                   strategy        group  dev_return  hold_return  all_return  dev_sharpe  hold_sharpe  hold_max_dd  avg_turnover  hold_acc_up_down  hold_acc_vs_median
+                        1/N    benchmark       0.183        0.130       0.160       0.954        0.558        0.165         0.061               NaN                 NaN
+                        SPY    benchmark       0.160        0.138       0.150       1.022        0.663        0.202         0.000               NaN                 NaN
+              BL prior only    benchmark       0.136        0.123       0.130       0.938        0.697        0.149         0.434               NaN                 NaN
+                   BL + MLP return model       0.199        0.072       0.143       0.891        0.256        0.192         1.087             0.504               0.496
+         BL + Random forest return model       0.121        0.080       0.103       0.669        0.329        0.143         0.863             0.511               0.499
+              BL + LightGBM return model       0.107        0.060       0.087       0.606        0.203        0.145         0.776             0.511               0.499
+           BL + Extra trees return model       0.122        0.073       0.100       0.671        0.284        0.142         0.882             0.511               0.498
+BL + Hist gradient boosting return model       0.110        0.064       0.090       0.614        0.234        0.144         0.757             0.511               0.500
+                   BL + KNN return model       0.132        0.074       0.107       0.714        0.295        0.151         1.046             0.512               0.502
+           BL + Elastic net return model       0.110        0.048       0.083       0.620        0.125        0.145         0.888             0.511               0.498
+          BL + Kernel ridge return model       0.129        0.070       0.103       0.722        0.267        0.142         1.006             0.512               0.497
+        BL + PCA regression return model       0.115        0.055       0.089       0.628        0.173        0.149         0.946             0.511               0.502
+BL + Naive Bayes classifier      up/down       0.106        0.057       0.084       0.610        0.184        0.152         0.662             0.511               0.496
+                 BL + Huber return model       0.103        0.048       0.079       0.606        0.127        0.128         0.978             0.511               0.495
+   BL + LightGBM classifier      up/down       0.119        0.042       0.085       0.680        0.091        0.165         1.112             0.511               0.496
+            BL + Linear SVR return model       0.100        0.056       0.081       0.602        0.186        0.129         0.887             0.511               0.490
+   BL + Quantile regression return model       0.103        0.052       0.081       0.620        0.158        0.135         0.920             0.511               0.497
+   BL + Logistic classifier      up/down       0.102        0.052       0.080       0.602        0.153        0.149         0.770             0.511               0.493
+  BL + Average of 15 models return model       0.117        0.052       0.089       0.664        0.152        0.156         0.888             0.511               0.497
+ BL + Logistic (up vs down)      up/down       0.104        0.060       0.085       0.599        0.207        0.158         0.563             0.511               0.504
+
+Paired Sharpe tests vs BL prior only (holdout = post-holdout):
+                   strategy period  sharpe_diff  ci_lo  ci_hi  boot_p  boot_p_holm
+                   BL + MLP   hold       -0.441 -1.246  0.116   0.180        1.000
+                   BL + MLP    all       -0.205 -0.715  0.199   0.378        1.000
+         BL + Random forest   hold       -0.368 -1.035  0.088   0.181        1.000
+         BL + Random forest    all       -0.304 -0.687 -0.043   0.067        1.000
+              BL + LightGBM   hold       -0.494 -1.137 -0.060   0.066        1.000
+              BL + LightGBM    all       -0.393 -0.772 -0.135   0.023        0.769
+           BL + Extra trees   hold       -0.414 -1.076  0.059   0.142        1.000
+           BL + Extra trees    all       -0.320 -0.715 -0.052   0.060        1.000
+BL + Hist gradient boosting   hold       -0.463 -1.142 -0.021   0.093        1.000
+BL + Hist gradient boosting    all       -0.373 -0.765 -0.108   0.032        0.869
+                   BL + KNN   hold       -0.403 -1.138  0.110   0.192        1.000
+                   BL + KNN    all       -0.287 -0.706  0.003   0.105        1.000
+           BL + Elastic net   hold       -0.572 -1.273 -0.103   0.053        1.000
+           BL + Elastic net    all       -0.413 -0.835 -0.134   0.030        0.855
+          BL + Kernel ridge   hold       -0.430 -1.208  0.140   0.202        1.000
+          BL + Kernel ridge    all       -0.297 -0.743  0.008   0.115        1.000
+        BL + PCA regression   hold       -0.524 -1.230 -0.021   0.082        1.000
+        BL + PCA regression    all       -0.388 -0.775 -0.126   0.027        0.843
+BL + Naive Bayes classifier   hold       -0.513 -1.186 -0.068   0.069        1.000
+BL + Naive Bayes classifier    all       -0.395 -0.788 -0.132   0.026        0.829
+                 BL + Huber   hold       -0.570 -1.307 -0.056   0.070        1.000
+                 BL + Huber    all       -0.418 -0.853 -0.130   0.030        0.855
+   BL + LightGBM classifier   hold       -0.606 -1.369 -0.096   0.061        1.000
+   BL + LightGBM classifier    all       -0.394 -0.860 -0.080   0.050        1.000
+            BL + Linear SVR   hold       -0.511 -1.198 -0.052   0.074        1.000
+            BL + Linear SVR    all       -0.397 -0.830 -0.110   0.036        0.939
+   BL + Quantile regression   hold       -0.540 -1.257 -0.047   0.076        1.000
+   BL + Quantile regression    all       -0.399 -0.839 -0.112   0.038        0.950
+   BL + Logistic classifier   hold       -0.545 -1.209 -0.089   0.057        1.000
+   BL + Logistic classifier    all       -0.413 -0.831 -0.134   0.028        0.843
+  BL + Average of 15 models   hold       -0.545 -1.207 -0.082   0.056        1.000
+  BL + Average of 15 models    all       -0.379 -0.798 -0.092   0.042        0.998
+ BL + Logistic (up vs down)   hold       -0.490 -1.079 -0.101   0.050        1.000
+ BL + Logistic (up vs down)    all       -0.391 -0.753 -0.145   0.020        0.670

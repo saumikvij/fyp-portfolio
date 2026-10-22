@@ -22,3 +22,8 @@ Done 22 Oct: final exam on 2022–2026 (MS12) and the 2008–2009 crisis test (M
 
 Results logs: `report/experiments/search_log.csv`, `placebo_log.csv`, `wide_search_log.csv`.
 The holdout (forecasts made in 2022–2026) has not been looked at for any new setup.
+
+Done 22 Oct evening (WU5, WU6): Black–Litterman on 1,047 stocks with every model's views,
+up/down classifiers, IPCA and industry rotation. None beats BL without views; up/down does
+not help. Results: `wide_bl_models.csv`, `wide_bl_models_tests.csv`, `wide_bl_extra.csv`,
+`wide_bl_extra_tests.csv`, `wide_ipca_log.csv`.
