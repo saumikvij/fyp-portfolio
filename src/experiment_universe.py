@@ -81,6 +81,9 @@ def load_wide() -> dict:
     uni = pd.read_csv(pdir / "universe.csv", index_col="ticker")
     out["sectors"] = uni[["sector"]]
     out["universe"] = uni
+    sh = WIDE / "processed" / "shares_outstanding.csv"
+    if sh.exists():
+        out["shares_outstanding"] = pd.read_csv(sh, index_col="ticker")
     return out
 
 
