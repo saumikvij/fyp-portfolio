@@ -1,0 +1,114 @@
+weekly features: (41667, 13) in 4s
+Weekly panel (41667, 15); 556 weekly decisions (314 dev, 242 holdout)
+Elastic net              dev IC +0.0079 (t +0.58)  hold IC +0.0534 (t +1.98)  placebo dev -0.0132  consistent False  (1s)
+LightGBM                 dev IC -0.0014 (t -0.14)  hold IC +0.0179 (t +1.40)  placebo dev -0.0023  consistent False  (3s)
+MLP                      dev IC +0.0153 (t +1.48)  hold IC -0.0036 (t -0.36)  placebo dev -0.0107  consistent True  (7s)
+Random forest            dev IC +0.0061 (t +0.58)  hold IC +0.0179 (t +1.41)  placebo dev -0.0042  consistent False  (18s)
+Huber                    dev IC +0.0029 (t +0.23)  hold IC +0.0021 (t +0.14)  placebo dev -0.0042  consistent False  (1s)
+Extra trees              dev IC +0.0024 (t +0.21)  hold IC +0.0152 (t +1.30)  placebo dev -0.0182  consistent False  (17s)
+KNN                      dev IC -0.0063 (t -0.76)  hold IC +0.0059 (t +0.52)  placebo dev -0.0247  consistent False  (25s)
+PCA regression           dev IC +0.0100 (t +0.82)  hold IC +0.0311 (t +2.08)  placebo dev -0.0064  consistent False  (0s)
+Hist gradient boosting   dev IC -0.0057 (t -0.72)  hold IC +0.0016 (t +0.18)  placebo dev +0.0006  consistent False  (6s)
+Kernel ridge             dev IC +0.0056 (t +0.48)  hold IC +0.0029 (t +0.24)  placebo dev -0.0150  consistent False  (2s)
+Logistic classifier      dev IC +0.0076 (t +0.57)  hold IC +0.0081 (t +0.55)  placebo dev -0.0078  consistent False  (0s)
+LightGBM classifier      dev IC +0.0103 (t +0.96)  hold IC +0.0183 (t +1.49)  placebo dev -0.0096  consistent True  (4s)
+Linear SVR               dev IC -0.0004 (t -0.03)  hold IC -0.0008 (t -0.06)  placebo dev -0.0020  consistent False  (4s)
+Quantile regression      dev IC -0.0005 (t -0.03)  hold IC +0.0112 (t +0.78)  placebo dev -0.0038  consistent False  (111s)
+Naive Bayes classifier   dev IC +0.0076 (t +0.62)  hold IC +0.0235 (t +1.53)  placebo dev -0.0094  consistent False  (0s)
+Always 'up' accuracy, holdout weeks: 51.8%
+1/N                                done in    0s
+SPY                                done in    0s
+Markowitz, hist. mean (S4)         done in    2s
+Raw elastic-net forecasts (S5)     done in    2s
+BL prior only                      done in   21s
+BL + Elastic net                   done in   21s
+BL + LightGBM                      done in   21s
+BL + MLP                           done in   21s
+BL + Random forest                 done in   21s
+BL + Huber                         done in   21s
+BL + Extra trees                   done in   22s
+BL + KNN                           done in   21s
+BL + PCA regression                done in   21s
+BL + Hist gradient boosting        done in   21s
+BL + Kernel ridge                  done in   21s
+BL + Logistic classifier           done in   21s
+BL + LightGBM classifier           done in   21s
+BL + Linear SVR                    done in   21s
+BL + Quantile regression           done in   21s
+BL + Naive Bayes classifier        done in   21s
+BL + Average of 15 models          done in   21s
+
+                family  dev_ic   dev_t  hold_ic  hold_t  block1  block2  block3  consistent  placebo_dev_ic  placebo_hold_ic  hold_acc_vs_median
+           Elastic net  0.0079  0.5778   0.0534  1.9770  0.0135 -0.0095  0.0822       False         -0.0132          -0.0216              0.5103
+              LightGBM -0.0014 -0.1393   0.0179  1.4036 -0.0097 -0.0260  0.0300       False         -0.0023          -0.0076              0.5054
+                   MLP  0.0153  1.4767  -0.0036 -0.3617  0.0153  0.0228  0.0082        True         -0.0107          -0.0046              0.4944
+         Random forest  0.0061  0.5842   0.0179  1.4113  0.0095 -0.0041  0.0129       False         -0.0042          -0.0158              0.4977
+                 Huber  0.0029  0.2302   0.0021  0.1423  0.0060 -0.0181  0.0204       False         -0.0042          -0.0150              0.4970
+           Extra trees  0.0024  0.2147   0.0152  1.2978 -0.0014 -0.0011  0.0093       False         -0.0182          -0.0114              0.5046
+                   KNN -0.0063 -0.7578   0.0059  0.5236 -0.0147 -0.0034 -0.0015       False         -0.0247          -0.0192              0.4955
+        PCA regression  0.0100  0.8170   0.0311  2.0751  0.0184 -0.0033  0.0152       False         -0.0064          -0.0153              0.5122
+Hist gradient boosting -0.0057 -0.7194   0.0016  0.1811 -0.0007 -0.0309  0.0140       False          0.0006           0.0044              0.5026
+          Kernel ridge  0.0056  0.4780   0.0029  0.2357  0.0090 -0.0115  0.0190       False         -0.0150          -0.0184              0.4989
+   Logistic classifier  0.0076  0.5731   0.0081  0.5542  0.0229 -0.0143  0.0149       False         -0.0078          -0.0164              0.5015
+   LightGBM classifier  0.0103  0.9607   0.0183  1.4929  0.0133  0.0010  0.0164        True         -0.0096           0.0012              0.5011
+            Linear SVR -0.0004 -0.0267  -0.0008 -0.0577  0.0065 -0.0155  0.0079       False         -0.0020          -0.0137              0.5001
+   Quantile regression -0.0005 -0.0337   0.0112  0.7830  0.0098 -0.0155  0.0046       False         -0.0038           0.0037              0.5061
+Naive Bayes classifier  0.0076  0.6232   0.0235  1.5263  0.0179 -0.0060  0.0113       False         -0.0094          -0.0156              0.5043
+
+                      strategy  dev_return  hold_return  all_return  growth_10k  dev_sharpe  hold_sharpe  hold_max_dd  avg_weekly_turnover
+                           1/N       0.204        0.106       0.160   49031.557       1.145        0.506        0.192                0.022
+                           SPY       0.168        0.128       0.150   44717.612       0.939        0.580        0.225                0.000
+    Markowitz, hist. mean (S4)       0.212        0.066       0.146   43080.763       1.188        0.243        0.237                0.083
+Raw elastic-net forecasts (S5)       0.158        0.080       0.123   34662.582       1.024        0.345        0.190                0.329
+                 BL prior only       0.175        0.106       0.145   42451.986       1.195        0.531        0.207                0.107
+              BL + Elastic net       0.186        0.102       0.149   44006.085       1.212        0.497        0.198                0.114
+                 BL + LightGBM       0.183        0.100       0.146   43031.623       1.199        0.486        0.196                0.150
+                      BL + MLP       0.190        0.061       0.132   37806.873       1.157        0.217        0.223                0.315
+            BL + Random forest       0.185        0.097       0.146   42960.309       1.205        0.464        0.193                0.173
+                    BL + Huber       0.184        0.089       0.142   41248.138       1.190        0.405        0.203                0.164
+              BL + Extra trees       0.185        0.097       0.146   42968.905       1.208        0.467        0.195                0.162
+                      BL + KNN       0.176        0.083       0.134   38443.847       1.144        0.369        0.213                0.272
+           BL + PCA regression       0.188        0.103       0.150   44504.252       1.214        0.503        0.198                0.131
+   BL + Hist gradient boosting       0.184        0.096       0.145   42423.891       1.208        0.465        0.197                0.107
+             BL + Kernel ridge       0.184        0.093       0.143   41924.421       1.197        0.436        0.201                0.161
+      BL + Logistic classifier       0.181        0.094       0.143   41614.576       1.193        0.455        0.196                0.123
+      BL + LightGBM classifier       0.152        0.100       0.129   36631.033       0.991        0.487        0.179                0.418
+               BL + Linear SVR       0.184        0.083       0.139   40276.582       1.185        0.373        0.199                0.189
+      BL + Quantile regression       0.184        0.090       0.142   41352.146       1.179        0.417        0.199                0.193
+   BL + Naive Bayes classifier       0.180        0.101       0.145   42516.533       1.168        0.494        0.198                0.142
+     BL + Average of 15 models       0.187        0.096       0.147   43150.684       1.211        0.462        0.197                0.144
+
+Paired Sharpe tests vs BL prior only (weekly, 26-week blocks):
+                   strategy period  sharpe_diff  boot_p  boot_p_holm
+           BL + Elastic net   hold       -0.035   0.604        1.000
+           BL + Elastic net    all        0.002   0.980        1.000
+              BL + LightGBM   hold       -0.045   0.528        1.000
+              BL + LightGBM    all       -0.012   0.845        1.000
+                   BL + MLP   hold       -0.314   0.018        0.576
+                   BL + MLP    all       -0.146   0.158        1.000
+         BL + Random forest   hold       -0.067   0.387        1.000
+         BL + Random forest    all       -0.018   0.801        1.000
+                 BL + Huber   hold       -0.126   0.178        1.000
+                 BL + Huber    all       -0.051   0.504        1.000
+           BL + Extra trees   hold       -0.065   0.404        1.000
+           BL + Extra trees    all       -0.014   0.828        1.000
+                   BL + KNN   hold       -0.162   0.060        1.000
+                   BL + KNN    all       -0.091   0.195        1.000
+        BL + PCA regression   hold       -0.028   0.661        1.000
+        BL + PCA regression    all        0.006   0.925        1.000
+BL + Hist gradient boosting   hold       -0.067   0.317        1.000
+BL + Hist gradient boosting    all       -0.014   0.804        1.000
+          BL + Kernel ridge   hold       -0.096   0.168        1.000
+          BL + Kernel ridge    all       -0.033   0.599        1.000
+   BL + Logistic classifier   hold       -0.077   0.251        1.000
+   BL + Logistic classifier    all       -0.025   0.655        1.000
+   BL + LightGBM classifier   hold       -0.044   0.665        1.000
+   BL + LightGBM classifier    all       -0.127   0.094        1.000
+            BL + Linear SVR   hold       -0.159   0.152        1.000
+            BL + Linear SVR    all       -0.065   0.441        1.000
+   BL + Quantile regression   hold       -0.115   0.315        1.000
+   BL + Quantile regression    all       -0.051   0.540        1.000
+BL + Naive Bayes classifier   hold       -0.038   0.541        1.000
+BL + Naive Bayes classifier    all       -0.023   0.692        1.000
+  BL + Average of 15 models   hold       -0.069   0.374        1.000
+  BL + Average of 15 models    all       -0.013   0.842        1.000

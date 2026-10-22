@@ -1,0 +1,55 @@
+model,method,period,sharpe_diff_vs_prior,boot_p,boot_p_holm
+Elastic net,Ω-A views (Phase 4),dev,-0.06839400062766243,0.5331,1.0
+Elastic net,Ω-A views (Phase 4),hold,-0.1339897667612534,0.1494,1.0
+Elastic net,Ω-A views (Phase 4),all,-0.08788797621153516,0.2319,1.0
+Elastic net,IC-scaled views,dev,-0.00251587790763402,0.3272,1.0
+Elastic net,IC-scaled views,hold,-0.10344247169173695,0.1021,1.0
+Elastic net,IC-scaled views,all,-0.05280618769703788,0.0605,1.0
+Elastic net,Strong-signal views,dev,-0.0021109413404832994,0.3276,1.0
+Elastic net,Strong-signal views,hold,-0.09113137472728344,0.138,1.0
+Elastic net,Strong-signal views,all,-0.04694841199510778,0.0828,1.0
+Elastic net,One relative view,dev,-0.1361455439716117,0.0461,1.0
+Elastic net,One relative view,hold,-0.2214844027748979,0.0426,1.0
+Elastic net,One relative view,all,-0.17487542967612163,0.0094,0.49820000000000003
+Elastic net,"Ω-A views, TE 2%",dev,-0.08313529872972089,0.1694,1.0
+Elastic net,"Ω-A views, TE 2%",hold,-0.08106395574159739,0.1777,1.0
+Elastic net,"Ω-A views, TE 2%",all,-0.07741014161254436,0.0613,1.0
+Elastic net,"IC-scaled views, TE 2%",dev,-0.008066572354689532,0.3281,1.0
+Elastic net,"IC-scaled views, TE 2%",hold,-0.07793218240786214,0.1373,1.0
+Elastic net,"IC-scaled views, TE 2%",all,-0.04308364681225375,0.0657,1.0
+LightGBM,Ω-A views (Phase 4),dev,-0.03585030438202333,0.7415,1.0
+LightGBM,Ω-A views (Phase 4),hold,-0.13596332585794335,0.0929,1.0
+LightGBM,Ω-A views (Phase 4),all,-0.07013976663783031,0.3099,1.0
+LightGBM,IC-scaled views,dev,-0.020794682537027327,0.3399,1.0
+LightGBM,IC-scaled views,hold,-0.054502339772097494,0.1981,1.0
+LightGBM,IC-scaled views,all,-0.035124740555986154,0.1282,1.0
+LightGBM,Strong-signal views,dev,0.006044596023779537,0.8097,1.0
+LightGBM,Strong-signal views,hold,-0.05050642911222409,0.1396,1.0
+LightGBM,Strong-signal views,all,-0.020040111112845135,0.3535,1.0
+LightGBM,One relative view,dev,-0.12855479152838295,0.0373,1.0
+LightGBM,One relative view,hold,-0.234094960423979,0.0374,1.0
+LightGBM,One relative view,all,-0.18557291700025214,0.0031,0.1674
+LightGBM,"Ω-A views, TE 2%",dev,-0.04386303170023372,0.5156,1.0
+LightGBM,"Ω-A views, TE 2%",hold,-0.07294847119350668,0.1613,1.0
+LightGBM,"Ω-A views, TE 2%",all,-0.05196462828200633,0.2243,1.0
+LightGBM,"IC-scaled views, TE 2%",dev,-0.03858716908181494,0.1807,1.0
+LightGBM,"IC-scaled views, TE 2%",hold,-0.04190387793278573,0.5201,1.0
+LightGBM,"IC-scaled views, TE 2%",all,-0.03955106114541265,0.2486,1.0
+Placebo (shuffled EN),Ω-A views (Phase 4),dev,-0.06521576787527517,0.5389,1.0
+Placebo (shuffled EN),Ω-A views (Phase 4),hold,-0.17759553026422614,0.0665,1.0
+Placebo (shuffled EN),Ω-A views (Phase 4),all,-0.1034544399278127,0.1655,1.0
+Placebo (shuffled EN),IC-scaled views,dev,-0.005497981218262402,0.7234,1.0
+Placebo (shuffled EN),IC-scaled views,hold,-0.025653535173690727,0.2819,1.0
+Placebo (shuffled EN),IC-scaled views,all,-0.01522701267449177,0.2755,1.0
+Placebo (shuffled EN),Strong-signal views,dev,0.006163112345162676,0.6621,1.0
+Placebo (shuffled EN),Strong-signal views,hold,-0.014112084005760814,0.6101,1.0
+Placebo (shuffled EN),Strong-signal views,all,-0.0041379638757511735,0.7777,1.0
+Placebo (shuffled EN),One relative view,dev,-0.07800760182172577,0.2133,1.0
+Placebo (shuffled EN),One relative view,hold,-0.14954149937068642,0.0543,1.0
+Placebo (shuffled EN),One relative view,all,-0.10684796545938716,0.0171,0.8892
+Placebo (shuffled EN),"Ω-A views, TE 2%",dev,-0.07814937482018953,0.143,1.0
+Placebo (shuffled EN),"Ω-A views, TE 2%",hold,-0.09768930000107673,0.1071,1.0
+Placebo (shuffled EN),"Ω-A views, TE 2%",all,-0.08117607984908067,0.0432,1.0
+Placebo (shuffled EN),"IC-scaled views, TE 2%",dev,-0.02276559400250015,0.4147,1.0
+Placebo (shuffled EN),"IC-scaled views, TE 2%",hold,-0.030877897066229176,0.3982,1.0
+Placebo (shuffled EN),"IC-scaled views, TE 2%",all,-0.026989491674676416,0.2307,1.0

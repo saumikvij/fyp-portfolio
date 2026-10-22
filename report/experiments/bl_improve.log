@@ -1,0 +1,99 @@
+—                      1/N                      done in    0s
+—                      Prior only               done in    1s
+Elastic net            Ω-A views (Phase 4)      done in    2s
+Elastic net            IC-scaled views          done in    2s
+Elastic net            Strong-signal views      done in    2s
+Elastic net            One relative view        done in    2s
+Elastic net            Ω-A views, TE 2%         done in    9s
+Elastic net            IC-scaled views, TE 2%   done in    3s
+LightGBM               Ω-A views (Phase 4)      done in    2s
+LightGBM               IC-scaled views          done in    2s
+LightGBM               Strong-signal views      done in    2s
+LightGBM               One relative view        done in    2s
+LightGBM               Ω-A views, TE 2%         done in   10s
+LightGBM               IC-scaled views, TE 2%   done in    5s
+Placebo (shuffled EN)  Ω-A views (Phase 4)      done in    2s
+Placebo (shuffled EN)  IC-scaled views          done in    2s
+Placebo (shuffled EN)  Strong-signal views      done in    2s
+Placebo (shuffled EN)  One relative view        done in    2s
+Placebo (shuffled EN)  Ω-A views, TE 2%         done in   10s
+Placebo (shuffled EN)  IC-scaled views, TE 2%   done in    4s
+
+                model                 method  dev_return  hold_return  all_return  growth_10k  dev_sharpe  hold_sharpe  hold_max_dd_daily  avg_turnover
+                    —                    1/N       0.195        0.111       0.158   48016.866       1.293        0.533              0.196         0.046
+                    —             Prior only       0.165        0.120       0.146   42625.959       1.225        0.634              0.206         0.240
+          Elastic net    Ω-A views (Phase 4)       0.167        0.101       0.138   39767.880       1.157        0.500              0.204         0.304
+          Elastic net        IC-scaled views       0.165        0.106       0.139   40236.673       1.223        0.530              0.206         0.275
+          Elastic net    Strong-signal views       0.165        0.108       0.140   40556.254       1.223        0.543              0.206         0.271
+          Elastic net      One relative view       0.146        0.088       0.121   33657.461       1.089        0.412              0.206         0.367
+          Elastic net       Ω-A views, TE 2%       0.158        0.108       0.136   39008.797       1.142        0.553              0.199         0.196
+          Elastic net IC-scaled views, TE 2%       0.164        0.110       0.141   40647.358       1.217        0.556              0.206         0.299
+             LightGBM    Ω-A views (Phase 4)       0.171        0.100       0.140   40474.738       1.189        0.498              0.205         0.316
+             LightGBM        IC-scaled views       0.164        0.112       0.142   41120.634       1.204        0.579              0.215         0.401
+             LightGBM    Strong-signal views       0.168        0.113       0.144   42011.083       1.231        0.583              0.216         0.387
+             LightGBM      One relative view       0.146        0.088       0.121   33728.203       1.096        0.400              0.224         0.492
+             LightGBM       Ω-A views, TE 2%       0.163        0.109       0.140   40297.837       1.181        0.561              0.200         0.176
+             LightGBM IC-scaled views, TE 2%       0.162        0.114       0.141   40872.284       1.186        0.592              0.215         0.450
+Placebo (shuffled EN)    Ω-A views (Phase 4)       0.166        0.094       0.135   38454.301       1.160        0.456              0.204         0.354
+Placebo (shuffled EN)        IC-scaled views       0.165        0.117       0.144   42005.082       1.220        0.608              0.206         0.327
+Placebo (shuffled EN)    Strong-signal views       0.167        0.118       0.146   42629.967       1.231        0.620              0.206         0.322
+Placebo (shuffled EN)      One relative view       0.158        0.099       0.132   37621.824       1.147        0.484              0.206         0.456
+Placebo (shuffled EN)       Ω-A views, TE 2%       0.158        0.105       0.135   38685.859       1.147        0.536              0.199         0.210
+Placebo (shuffled EN) IC-scaled views, TE 2%       0.164        0.116       0.143   41673.400       1.202        0.603              0.206         0.382
+
+Paired Sharpe tests vs prior only:
+                model                 method period  sharpe_diff_vs_prior  boot_p  boot_p_holm
+          Elastic net    Ω-A views (Phase 4)    dev                -0.068   0.533        1.000
+          Elastic net    Ω-A views (Phase 4)   hold                -0.134   0.149        1.000
+          Elastic net    Ω-A views (Phase 4)    all                -0.088   0.232        1.000
+          Elastic net        IC-scaled views    dev                -0.003   0.327        1.000
+          Elastic net        IC-scaled views   hold                -0.103   0.102        1.000
+          Elastic net        IC-scaled views    all                -0.053   0.060        1.000
+          Elastic net    Strong-signal views    dev                -0.002   0.328        1.000
+          Elastic net    Strong-signal views   hold                -0.091   0.138        1.000
+          Elastic net    Strong-signal views    all                -0.047   0.083        1.000
+          Elastic net      One relative view    dev                -0.136   0.046        1.000
+          Elastic net      One relative view   hold                -0.221   0.043        1.000
+          Elastic net      One relative view    all                -0.175   0.009        0.498
+          Elastic net       Ω-A views, TE 2%    dev                -0.083   0.169        1.000
+          Elastic net       Ω-A views, TE 2%   hold                -0.081   0.178        1.000
+          Elastic net       Ω-A views, TE 2%    all                -0.077   0.061        1.000
+          Elastic net IC-scaled views, TE 2%    dev                -0.008   0.328        1.000
+          Elastic net IC-scaled views, TE 2%   hold                -0.078   0.137        1.000
+          Elastic net IC-scaled views, TE 2%    all                -0.043   0.066        1.000
+             LightGBM    Ω-A views (Phase 4)    dev                -0.036   0.742        1.000
+             LightGBM    Ω-A views (Phase 4)   hold                -0.136   0.093        1.000
+             LightGBM    Ω-A views (Phase 4)    all                -0.070   0.310        1.000
+             LightGBM        IC-scaled views    dev                -0.021   0.340        1.000
+             LightGBM        IC-scaled views   hold                -0.055   0.198        1.000
+             LightGBM        IC-scaled views    all                -0.035   0.128        1.000
+             LightGBM    Strong-signal views    dev                 0.006   0.810        1.000
+             LightGBM    Strong-signal views   hold                -0.051   0.140        1.000
+             LightGBM    Strong-signal views    all                -0.020   0.354        1.000
+             LightGBM      One relative view    dev                -0.129   0.037        1.000
+             LightGBM      One relative view   hold                -0.234   0.037        1.000
+             LightGBM      One relative view    all                -0.186   0.003        0.167
+             LightGBM       Ω-A views, TE 2%    dev                -0.044   0.516        1.000
+             LightGBM       Ω-A views, TE 2%   hold                -0.073   0.161        1.000
+             LightGBM       Ω-A views, TE 2%    all                -0.052   0.224        1.000
+             LightGBM IC-scaled views, TE 2%    dev                -0.039   0.181        1.000
+             LightGBM IC-scaled views, TE 2%   hold                -0.042   0.520        1.000
+             LightGBM IC-scaled views, TE 2%    all                -0.040   0.249        1.000
+Placebo (shuffled EN)    Ω-A views (Phase 4)    dev                -0.065   0.539        1.000
+Placebo (shuffled EN)    Ω-A views (Phase 4)   hold                -0.178   0.066        1.000
+Placebo (shuffled EN)    Ω-A views (Phase 4)    all                -0.103   0.166        1.000
+Placebo (shuffled EN)        IC-scaled views    dev                -0.005   0.723        1.000
+Placebo (shuffled EN)        IC-scaled views   hold                -0.026   0.282        1.000
+Placebo (shuffled EN)        IC-scaled views    all                -0.015   0.276        1.000
+Placebo (shuffled EN)    Strong-signal views    dev                 0.006   0.662        1.000
+Placebo (shuffled EN)    Strong-signal views   hold                -0.014   0.610        1.000
+Placebo (shuffled EN)    Strong-signal views    all                -0.004   0.778        1.000
+Placebo (shuffled EN)      One relative view    dev                -0.078   0.213        1.000
+Placebo (shuffled EN)      One relative view   hold                -0.150   0.054        1.000
+Placebo (shuffled EN)      One relative view    all                -0.107   0.017        0.889
+Placebo (shuffled EN)       Ω-A views, TE 2%    dev                -0.078   0.143        1.000
+Placebo (shuffled EN)       Ω-A views, TE 2%   hold                -0.098   0.107        1.000
+Placebo (shuffled EN)       Ω-A views, TE 2%    all                -0.081   0.043        1.000
+Placebo (shuffled EN) IC-scaled views, TE 2%    dev                -0.023   0.415        1.000
+Placebo (shuffled EN) IC-scaled views, TE 2%   hold                -0.031   0.398        1.000
+Placebo (shuffled EN) IC-scaled views, TE 2%    all                -0.027   0.231        1.000
