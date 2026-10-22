@@ -472,3 +472,17 @@ Unchanged and already documented: survivorship bias (D0.2, approved A1), current
 - **Finalists by the pre-set rule (MS3 + MS5):** kernel ridge (rolling 4y, raw, risk set), KNN (rolling 4y, demeaned, risk set), LightGBM (rolling 4y, demeaned, risk set), all retrained yearly with the wide grids.
 - **Wide universe (60 setups, 1,052 stocks):** no setup reaches t > 2 (best 1.56). But the *typical* setup does better than the placebo: median IC 0.006 vs −0.001 overall, and 0.019 vs 0.001 for mid caps, so a small, broad signal in mid/small caps is likely, while no single setup is clearly reliable. The placebo's best t is 2.15, showing that one t > 2 among many tries is expected by luck.
 - **Next (student to decide):** weekly experiment (E1), then the single holdout run of the three finalists (`--stage final`), then the 2008 stress test (MS10).
+
+### MS12 Holdout result (22 Oct 2026; run once, after all development searching)
+- The weekly experiment (E1) was not run first, at the student's choice; it can no longer influence the choice of finalists.
+- **Forecasts made Jan 2022 – Jul 2026, finalists chosen on 2016–2021:**
+
+| Finalist | Dev IC (NW t) | Holdout IC (NW t) | Holdout IC by year 2022 / 23 / 24 / 25 / 26 |
+|---|---|---|---|
+| Kernel ridge, roll 4y, raw, risk set | 0.058 (1.96) | 0.014 (0.48) | −0.058 / 0.010 / 0.019 / 0.107 / −0.023 |
+| KNN, roll 4y, demeaned, risk set | 0.054 (2.10) | 0.021 (0.73) | −0.043 / 0.010 / 0.057 / 0.105 / −0.053 |
+| LightGBM, roll 4y, demeaned, risk set | 0.053 (2.52) | 0.002 (0.07) | −0.062 / −0.067 / 0.041 / 0.101 / −0.007 |
+
+  All three have holdout R²_oos below the historical-mean baseline.
+- **Portfolios (S6, γ = 5, 10 bps), holdout Sharpe:** kernel ridge 0.54, KNN 0.53, LightGBM 0.53, original Phase 4 S6 0.50, 1/N 0.53, S4 0.30, **BL prior only 0.63**.
+- **Conclusion:** after ~900 setups (15 families, 5 windows, 2 targets, 4 signal sets, wide grids, 2 universes), no reliable predictive benefit was detected under the tested conditions. The finalists' development scores were inflated by the number of setups tried and by choosing the risk signal set on the same data (MS8), exactly as the placebo and the design anticipated; the holdout removed the inflation. The main conclusion of Phase 4 is unchanged: Black–Litterman protects the portfolio, and with views that show no reliable predictive benefit, staying near the market prior does best.
