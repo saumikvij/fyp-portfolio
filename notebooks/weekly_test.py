@@ -1,6 +1,11 @@
 """EXPERIMENT (branch experiment/model-search): weekly rebalancing and forecasting (E1, WK1).
 
-Run:  python -m notebooks.weekly_test
+Run:  python -m notebooks.weekly_test                    # 51 stocks
+      python -m notebooks.weekly_test --universe wide    # 1,052 / 1,047 stocks (WK2)
+      (--only real / --only placebo: just train and save those forecasts, e.g. in parallel)
+
+Wide universe (WK2): forecasts for all 1,052 stocks; portfolios on the 1,047 with a share
+count, with Ledoit–Wolf Σ and a 2% cap as in WU4; S4 and S5 are not run there.
 
 51 stocks, week-ends from the first week of 2016 (last decision July 2026). For each of
 the 15 model families (base signals, raw target, expanding window, settings rescaled to
@@ -14,6 +19,8 @@ the views of every family and of their average. Paired Sharpe tests against the 
 
 from __future__ import annotations
 
+import argparse
+import copy
 import time
 from pathlib import Path
 
@@ -25,6 +32,7 @@ from src.backtest import (black_litterman_strategy, buy_and_hold, equal_weight,
                           forecast_strategy, markowitz_strategy, rebalance_dates, run_backtest)
 from src.data import load_config, load_processed
 from src.experiment_models import shuffle_targets
+from src.experiment_universe import load_wide
 from src.experiment_weekly import weekly_cfg, weekly_data, weekly_feature_panel, weekly_metrics
 from src.features import FEATURES
 from src.metrics import holm_adjust, sharpe_difference_bootstrap
@@ -36,12 +44,30 @@ FC = Path("data/ml/weekly")
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--universe", choices=["51", "wide"], default="51")
+    ap.add_argument("--only", choices=["real", "placebo"], default=None)
+    args = ap.parse_args()
+    wide = args.universe == "wide"
     cfg0 = load_config()
     cfg = weekly_cfg(cfg0)
     ms, ml, bt = cfg["model_search"], cfg["ml"], cfg["backtest"]
-    data = load_processed(cfg0)
+    data = load_wide() if wide else load_processed(cfg0)
     wk = weekly_data(data)
-    stocks = list(cfg["universe"])
+    if wide:
+        uni = data["universe"]
+        stocks = list(uni.index)
+        port_stocks = [s_ for s_ in stocks if s_ in data["shares_outstanding"].index]
+        port = ms["wide"]["portfolio"]
+        cfg = copy.deepcopy(cfg)
+        cfg["backtest"].update(cov_method=port["cov_method"], w_max=port["w_max"])
+        cfg["universe"] = {s_: uni.loc[s_, "sector"] for s_ in port_stocks}
+    else:
+        stocks = list(cfg["universe"])
+        port_stocks = stocks
+    tag = "weekly_wide" if wide else "weekly"
+    global FC
+    FC = Path(f"data/ml/{tag}")
     bench = cfg["data"]["benchmark"]
     dates = rebalance_dates(wk["returns_monthly"].index, bt["oos_start"])
     dev_end = pd.Timestamp(ms["dev_end"])
@@ -72,6 +98,8 @@ def main() -> None:
         t0 = time.time()
         out = {}
         for kind, pnl, d in (("real", panel, FC), ("placebo", placebo_panel, FC / "placebo")):
+            if args.only and kind != args.only:
+                continue
             path = d / f"{fam.lower().replace(' ', '_')}.parquet"
             if path.exists():
                 out[kind] = pd.read_parquet(path)
@@ -79,6 +107,9 @@ def main() -> None:
                 out[kind] = walk_forward(build_model(fam, cfg, FEATURES), pnl, dates,
                                          ml["val_months"], ml["min_train_months"]).forecasts
                 out[kind].to_parquet(path)
+        if args.only:
+            print(f"{fam:24s} {args.only} forecasts saved ({time.time() - t0:.0f}s)", flush=True)
+            continue
         f = out["real"].reindex(columns=stocks)
         fcs[fam] = f
         ic, sdev = ic_stats(f, dev)
@@ -97,22 +128,28 @@ def main() -> None:
                      "consistent": all(np.nan_to_num(v, nan=-1) > 0 for v in blocks),
                      "placebo_dev_ic": pdev["mean"], "placebo_hold_ic": phold["mean"],
                      "hold_acc_vs_median": float(acc_rel)})
-        pd.DataFrame(rows).to_csv(OUT / "weekly_forecasts.csv", index=False)
+        pd.DataFrame(rows).to_csv(OUT / f"{tag}_forecasts.csv", index=False)
         print(f"{fam:24s} dev IC {sdev['mean']:+.4f} (t {sdev['t_stat_nw']:+.2f})  hold IC "
               f"{shold['mean']:+.4f} (t {shold['t_stat_nw']:+.2f})  placebo dev {pdev['mean']:+.4f}  "
               f"consistent {rows[-1]['consistent']}  ({time.time() - t0:.0f}s)", flush=True)
+    if args.only:
+        return
     fcs["Average of 15 models"] = sum(fcs.values()) / len(fcs)
     up_rate = (realized.loc[hold] > 0).stack().mean()
     print(f"Always 'up' accuracy, holdout weeks: {up_rate:.1%}")
 
     g, tau = cfg["risk_tolerance"]["medium"], cfg["black_litterman"]["tau"]
-    strategies = {"1/N": equal_weight(stocks), "SPY": buy_and_hold(bench),
-                  "Markowitz, hist. mean (S4)": markowitz_strategy(stocks, cfg, g),
-                  "Raw elastic-net forecasts (S5)": forecast_strategy(fcs["Elastic net"], stocks, cfg, g),
-                  "BL prior only": black_litterman_strategy(fcs["Elastic net"], None, stocks, cfg,
-                                                            g, "A", tau, views=False)}
+    ps = port_stocks
+    strategies = {"1/N": equal_weight(ps), "SPY": buy_and_hold(bench)}
+    if not wide:
+        strategies.update({"Markowitz, hist. mean (S4)": markowitz_strategy(ps, cfg, g),
+                           "Raw elastic-net forecasts (S5)": forecast_strategy(fcs["Elastic net"],
+                                                                               ps, cfg, g)})
+    strategies["BL prior only"] = black_litterman_strategy(fcs["Elastic net"], None, ps, cfg,
+                                                           g, "A", tau, views=False)
     for name, f in fcs.items():
-        strategies[f"BL + {name}"] = black_litterman_strategy(f, None, stocks, cfg, g, "A", tau)
+        strategies[f"BL + {name}"] = black_litterman_strategy(f.reindex(columns=ps), None, ps,
+                                                              cfg, g, "A", tau)
     cache = FC / "runs"
     cache.mkdir(exist_ok=True)
     prow, nets = [], {}
@@ -132,7 +169,7 @@ def main() -> None:
         for label, seg in (("dev", net.loc[:split]), ("hold", net.loc[split:].iloc[1:]), ("all", net)):
             row.update({f"{label}_{k}": v for k, v in weekly_metrics(seg, rf).items()})
         prow.append(row)
-        pd.DataFrame(prow).to_csv(OUT / "weekly_portfolios.csv", index=False)
+        pd.DataFrame(prow).to_csv(OUT / f"{tag}_portfolios.csv", index=False)
         print(f"{name:34s} done in {time.time() - t0:4.0f}s", flush=True)
     table = pd.DataFrame(prow)
 
@@ -148,7 +185,7 @@ def main() -> None:
                           "boot_p": boot["p_value"]})
     tests = pd.DataFrame(tests)
     tests["boot_p_holm"] = holm_adjust(tests["boot_p"])
-    tests.to_csv(OUT / "weekly_tests.csv", index=False)
+    tests.to_csv(OUT / f"{tag}_tests.csv", index=False)
 
     pd.set_option("display.width", 250)
     print("\n" + pd.DataFrame(rows).round(4).to_string(index=False))

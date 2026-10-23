@@ -1,0 +1,33 @@
+strategy,period,sharpe_diff,boot_p,boot_p_holm
+BL + Elastic net,hold,-0.29240527297540364,0.2019,1.0
+BL + Elastic net,all,-0.27186530544845816,0.0678,1.0
+BL + LightGBM,hold,-0.2851906462501925,0.1727,1.0
+BL + LightGBM,all,-0.2529353577287812,0.0788,1.0
+BL + MLP,hold,-0.06984184802395799,0.7851,1.0
+BL + MLP,all,-0.25523823527671563,0.1168,1.0
+BL + Random forest,hold,-0.3009540022227383,0.1441,1.0
+BL + Random forest,all,-0.2399540047829238,0.1023,1.0
+BL + Huber,hold,-0.42428731241702833,0.0715,1.0
+BL + Huber,all,-0.33136656010473825,0.048,1.0
+BL + Extra trees,hold,-0.26709738956789136,0.2234,1.0
+BL + Extra trees,all,-0.25175739550856036,0.0726,1.0
+BL + KNN,hold,-0.2710394510450114,0.19,1.0
+BL + KNN,all,-0.34516578271262854,0.0195,0.624
+BL + PCA regression,hold,-0.23456004656545631,0.3816,1.0
+BL + PCA regression,all,-0.2816926128666432,0.0531,1.0
+BL + Hist gradient boosting,hold,-0.2795859017895499,0.1741,1.0
+BL + Hist gradient boosting,all,-0.2572151561284665,0.0624,1.0
+BL + Kernel ridge,hold,-0.1969477773094189,0.4114,1.0
+BL + Kernel ridge,all,-0.24843218799376607,0.0843,1.0
+BL + Logistic classifier,hold,-0.4078697476076339,0.0773,1.0
+BL + Logistic classifier,all,-0.2877547268379299,0.0683,1.0
+BL + LightGBM classifier,hold,-0.41584373133213853,0.0757,1.0
+BL + LightGBM classifier,all,-0.29146823371811875,0.0711,1.0
+BL + Linear SVR,hold,-0.40089467845547894,0.0581,1.0
+BL + Linear SVR,all,-0.31067580128655825,0.0743,1.0
+BL + Quantile regression,hold,-0.3497797843910579,0.1051,1.0
+BL + Quantile regression,all,-0.34989879858481293,0.047,1.0
+BL + Naive Bayes classifier,hold,-0.3941549179248138,0.0611,1.0
+BL + Naive Bayes classifier,all,-0.2995006350282128,0.0498,1.0
+BL + Average of 15 models,hold,-0.32239986880939786,0.1481,1.0
+BL + Average of 15 models,all,-0.2728359512210757,0.0675,1.0
