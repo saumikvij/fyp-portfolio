@@ -213,6 +213,27 @@ pytest tests/test_recommend.py
 
 Outputs: `report/tables/phase5_examples.csv` (one row per scenario, with every constraint check), `phase5_example_holdings.csv`, `phase5_example_sectors.csv`, and `report/figures/recommend_sectors.png`.
 
+## Final design (D6): two return models + ML risk model
+
+```bash
+python -m notebooks.final_design
+```
+
+Chosen after the experiments on branch `experiment/model-search` (see DECISIONS.md D6), and reported next to the pre-registered Phase 4 headline:
+1. **Views:** Phase 3 elastic-net and LightGBM forecasts, averaged into one view set (their errors are 0.999 correlated, so stacking them would double-count).
+2. **ML risk model** ([src/risk_model.py](src/risk_model.py)): an elastic net forecasts each stock's next-month volatility from its 1-week, 1-month, 3-month and 1-year volatility, its high–low range and market volatility; Σ = D·R·D with D the forecast volatilities and R the trailing correlation. Passed to Black–Litterman with `vol_forecasts=` (prior, posterior and optimizer all use it).
+3. **Black–Litterman** as in Phase 4 (Ω-A, τ = 0.05, γ = 5, 10% cap, 10 bps).
+
+Outputs in `report/tables/`: `final_risk_accuracy.csv` and `final_risk_dm.csv` (risk model vs trailing volatility and HAR, Diebold–Mariano), `final_risk_level.csv` (stated vs realized portfolio risk), `final_design_metrics.csv`, `final_design_tests.csv` (paired Sharpe tests, Holm).
+
+| Test (`tests/test_risk_model.py`) | Result checked |
+|---|---|
+| `test_target_is_next_month_realized_volatility` | the target at t is the volatility of the days after t up to the next month-end |
+| `test_features_use_only_past_data`, `test_vol_forecasts_unchanged_by_future_data` | scrambling data after t changes nothing dated ≤ t |
+| `test_dr_covariance_is_psd_with_forecast_diagonal`, `test_dr_covariance_uses_only_past` | Σ = D·R·D is symmetric PSD, its diagonal equals the forecast variances, and it uses only data ≤ t |
+| `test_bl_uses_ml_sigma_only_when_given` | without `vol_forecasts` Black–Litterman is unchanged; with it, Σ = D·R·D |
+| `test_har_recovers_a_linear_relation`, `test_diebold_mariano` | the HAR baseline and the Diebold–Mariano test behave as defined |
+
 ## Tests
 
 ```bash

@@ -65,6 +65,8 @@ class ElasticNetModel:
 
     Hyperparameters α (penalty strength) and l1_ratio (lasso share) are chosen on the
     chronological validation split; ``seed`` fixes the coordinate-descent order.
+    ``features`` selects the input columns (default: the 13 return features; the
+    volatility model in ``src.risk_model`` passes its own).
     """
 
     alphas: list[float]
@@ -73,6 +75,7 @@ class ElasticNetModel:
     seed: int
     retrain_every: int = 12
     name: str = "Elastic net"
+    features: list[str] = field(default_factory=lambda: list(FEATURES))
     tuned: bool = True
     params_: dict = field(default_factory=dict)
 
@@ -84,24 +87,24 @@ class ElasticNetModel:
         """Grid search on (α, l1_ratio) by validation MSE; returns the best setting."""
         best = None
         for a, l1 in product(self.alphas, self.l1_ratios):
-            m = self._make(a, l1).fit(tune_set[FEATURES].values, tune_set["target"].values)
-            mse = _mse(m.predict(val_set[FEATURES].values), val_set["target"].values)
+            m = self._make(a, l1).fit(tune_set[self.features].values, tune_set["target"].values)
+            mse = _mse(m.predict(val_set[self.features].values), val_set["target"].values)
             if best is None or mse < best["val_mse"]:
                 best = {"alpha": a, "l1_ratio": l1, "val_mse": mse}
         return best
 
     def fit(self, train: pd.DataFrame) -> None:
         self.model_ = self._make(self.params_["alpha"], self.params_["l1_ratio"])
-        self.model_.fit(train[FEATURES].values, train["target"].values)
+        self.model_.fit(train[self.features].values, train["target"].values)
 
     def predict_array(self, X: np.ndarray) -> np.ndarray:
         return self.model_.predict(X)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        return self.predict_array(X[FEATURES].values)
+        return self.predict_array(X[self.features].values)
 
     def coefficients(self) -> dict:
-        return dict(zip(FEATURES, self.model_.coef_))
+        return dict(zip(self.features, self.model_.coef_))
 
     def clone(self, seed: int) -> "ElasticNetModel":
         c = copy.deepcopy(self)

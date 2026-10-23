@@ -335,7 +335,8 @@ def forecast_strategy(forecasts: pd.DataFrame, stocks: list[str], cfg: dict,
 def black_litterman_strategy(forecasts: pd.DataFrame, ensemble_var: pd.DataFrame | None,
                              stocks: list[str], cfg: dict, gamma: float, omega_kind: str,
                              tau: float, omega_scale: float = 1.0,
-                             views: bool = True) -> Strategy:
+                             views: bool = True,
+                             vol_forecasts: pd.DataFrame | None = None) -> Strategy:
     """S6: mean-variance with the Black–Litterman posterior mean μ_BL as μ.
 
     At each t: Σ from the trailing window, market prior Π = δΣw_mkt, views Q = ML
@@ -353,6 +354,8 @@ def black_litterman_strategy(forecasts: pd.DataFrame, ensemble_var: pd.DataFrame
     tau : τ.
     omega_scale : multiplies Ω (ablation).
     views : False uses μ = Π (the prior alone, the Ω → ∞ limit of Cor. 6.1).
+    vol_forecasts : ML volatility forecasts; if given, Σ = D·R·D (``src.risk_model``, D6)
+        is used for the prior, the posterior and the optimization.
 
     Returns
     -------
@@ -362,7 +365,7 @@ def black_litterman_strategy(forecasts: pd.DataFrame, ensemble_var: pd.DataFrame
     """
     def strategy(hist: History) -> pd.Series:
         inp = bl_inputs(hist, forecasts, ensemble_var, stocks, cfg, omega_kind, tau,
-                        omega_scale)
+                        omega_scale, vol_forecasts)
         mu = inp["mu_bl"] if views else inp["Pi"]
         return mean_variance(mu, inp["Sigma"], gamma, _constraints(hist, cfg),
                              cfg["optimization"]["solver"]).weights

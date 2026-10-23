@@ -113,6 +113,33 @@ def summarize_series(x: pd.Series, periods_per_year: int = 12) -> dict[str, floa
             "share_positive": float((x > 0).mean()), "n": int(len(x))}
 
 
+def diebold_mariano(loss_a: pd.Series, loss_b: pd.Series) -> dict[str, float]:
+    """Diebold–Mariano (1995) test of equal forecast accuracy (plan item O3).
+
+    d_t = loss_a,t − loss_b,t (e.g. each month's mean squared error across stocks);
+    DM = mean(d) / NW-se(mean d), asymptotically N(0, 1) under H0: E[d] = 0. Negative
+    means forecast a is more accurate.
+
+    Parameters
+    ----------
+    loss_a, loss_b : per-period losses, aligned on the index.
+
+    Returns
+    -------
+    dict with mean_diff, dm (the t-statistic) and p_value (two-sided, normal).
+
+    Theorem: none (cited test; Newey–West standard error as in ``newey_west_se``).
+    """
+    from scipy.stats import norm
+    d = (loss_a - loss_b).dropna()
+    se = newey_west_se(d)
+    if se == 0:                                   # identical losses: no difference
+        dm = 0.0 if d.mean() == 0 else float(np.sign(d.mean()) * np.inf)
+    else:
+        dm = float(d.mean() / se)
+    return {"mean_diff": float(d.mean()), "dm": dm, "p_value": float(2 * norm.sf(abs(dm)))}
+
+
 def hit_rate(forecast: pd.DataFrame, realized: pd.DataFrame) -> dict[str, float]:
     """Share of stock-months where the forecast has the sign of the realized return.
 

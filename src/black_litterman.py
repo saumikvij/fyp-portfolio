@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from src.estimators import sample_covariance
+from src.risk_model import dr_covariance
 
 
 # --------------------------------------------------------------------------- prior
@@ -275,7 +276,7 @@ def omega_b(ensemble_var: pd.Series, omega_a_level: pd.Series | None = None,
 
 def bl_inputs(hist, forecasts: pd.DataFrame, ensemble_var: pd.DataFrame | None,
               stocks: list[str], cfg: dict, omega_kind: str, tau: float,
-              omega_scale: float = 1.0) -> dict:
+              omega_scale: float = 1.0, vol_forecasts: pd.DataFrame | None = None) -> dict:
     """Everything Black–Litterman needs at rebalance date ``hist.t``, from data <= t.
 
     Parameters
@@ -289,6 +290,8 @@ def bl_inputs(hist, forecasts: pd.DataFrame, ensemble_var: pd.DataFrame | None,
     omega_kind : "A", "B" (raw) or "B-cal" (level-calibrated to Ω-A).
     tau : τ.
     omega_scale : multiplies Ω (ablation).
+    vol_forecasts : ML log-volatility forecasts (date x ticker, ``src.risk_model``); if
+        given, Σ = D·R·D from row t instead of the sample covariance (D6).
 
     Returns
     -------
@@ -298,8 +301,11 @@ def bl_inputs(hist, forecasts: pd.DataFrame, ensemble_var: pd.DataFrame | None,
     """
     bl = cfg["black_litterman"]
     t = hist.t
-    Sigma = sample_covariance(hist.returns_daily[stocks], t, cfg["backtest"]["cov_window_days"],
-                              cfg["data"]["trading_days_per_year"] / 12)
+    window, dpm = cfg["backtest"]["cov_window_days"], cfg["data"]["trading_days_per_year"] / 12
+    if vol_forecasts is None:
+        Sigma = sample_covariance(hist.returns_daily[stocks], t, window, dpm)
+    else:
+        Sigma = dr_covariance(hist.returns_daily, t, stocks, vol_forecasts.loc[t], window, dpm)
     w_mkt = market_weights(hist.close.loc[t, stocks], hist.shares[stocks])
     Pi = implied_prior(Sigma, w_mkt, bl["delta"])
     Q = forecasts.loc[t, stocks]

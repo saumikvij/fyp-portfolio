@@ -389,3 +389,26 @@ Unchanged and already documented: survivorship bias (D0.2, approved A1), current
 - **Reported:** the same forecast metrics (R²_oos, rank IC with Newey–West t, quintile spread) and portfolio metrics (annualized ×52), S1, S4, S5, S6 side by side with the monthly results.
 - **Status:** a robustness experiment. **The monthly results stay the main results whatever the weekly ones show**, and the weekly ones are reported in full either way.
 
+
+## D6 Final design (23 Oct 2026), after the experiment branch
+
+The experiments of 17–23 Oct ran on the git branch `experiment/model-search` (its DECISIONS.md, sections MS1–MS16, WU1–WU7, BL1, WK1–WK2, FN1–FN2, records every design and result; nothing from it changed the main branch until this section). Summary of what was learned there:
+- **Return forecasts:** about 1,100 model setups (15 families, 5 training windows, 2 targets, 4 signal sets), a placebo with shuffled targets, a 3-block consistency rule on 2016–21 and a single look at 2022–26: no setup gave a reliable monthly return forecast on the 51 stocks; the best real scores were no better than the placebo's. On 1,047 S&P 1500 stocks at a weekly horizon, four tree models showed a small but consistent ranking skill (rank IC ≈ 0.015, t ≈ 2 in both periods, placebo ≈ 0), too small to improve a Black–Litterman portfolio after costs. Up/down classifiers, IPCA, learning to rank, industry rotation and four ways of changing how BL uses the views did not beat BL without views.
+- **Risk forecasts:** an elastic net forecasting next-month volatility beat trailing volatility and the HAR model in both periods (Diebold–Mariano), the one ML result that held out of sample.
+
+### D6.1 What enters the main branch
+- **ML risk model** (`src/risk_model.py`): next-month log volatility from 6 volatility inputs, the Phase 3 elastic net and walk-forward; Σ = D·R·D (D = forecast volatilities, R = trailing 252-day correlation). Optional in `black_litterman_strategy` / `bl_inputs` (`vol_forecasts=`); when it is not passed, everything is exactly as before (tested). Diebold–Mariano test added to `src/ml_eval.py` (plan item O3).
+- **Views:** the Phase 3 elastic-net and LightGBM forecasts averaged into one view set (both plan models). Averaged, not stacked: their forecast errors are almost perfectly correlated (0.999), so two separate views would count the same evidence twice and over-trust the ML (stacked: Sharpe 2022–26 0.46 vs 0.53 averaged, FN2). LightGBM was chosen among the tree models without using 2022–26 (FN2).
+- **Final design** = BL with these averaged views, Ω-A, τ = 0.05, γ = 5, Σ from the risk model (`config.yaml: final_design`, `notebooks/final_design.py`).
+
+### D6.2 How it is reported
+- It was chosen **after** seeing results, including 2022–26, so it is reported **next to** the pre-registered Phase 4 headline (S6 with elastic net, D4.1), not instead of it, and its 2022–26 numbers are not an untouched test.
+
+### D6.3 Results (`report/tables/final_design_*.csv`, `final_risk_*.csv`)
+- **Risk model:** MSE of log volatility 2016–21 / 2022–26: trailing 63-day 0.194 / 0.119, HAR 0.157 / 0.108, elastic net 0.149 / 0.097; Diebold–Mariano vs trailing volatility t = −2.70 / −2.33, vs HAR −4.60 / −6.13 (all p < 0.02). For the BL prior portfolio, the stated next-month volatility is closer to the realized one with ML Σ (bias +0.03, RMSE 0.44 in log terms) than with the sample Σ (+0.16, 0.53).
+- **Portfolios, 2016–2026, 10 bps** (return a year, $10,000 → end, Sharpe; Sharpe 2016–21 / 2022–26; turnover): BL prior 14.6%, $42.6k, 0.96 (1.23 / 0.63), 24%; S6 headline (elastic net) 13.8%, $39.8k, 0.88 (1.16 / 0.50), 30%; EN + LightGBM averaged 13.9%, $40.2k, 0.89; **final design 14.3%, $41.7k, 0.90 (1.17 / 0.53), 52%**; 1/N 15.8%, $48.0k; SPY 15.0%, $44.6k.
+- **Paired tests (Holm):** final vs BL prior −0.07 (p 0.83), final vs S6 headline +0.02 (p 0.83). No difference is significant.
+- **Reading:** the final design improves on the pre-registered headline and ends close to BL without views, but does not beat it; its clear ML contribution is the more accurate risk forecast, not higher returns. The turnover roughly doubles with the ML Σ (volatility forecasts change every month).
+
+### D6.4 Not changed (yet)
+- The Phase 5 tool still runs the Phase 4 headline; switching it to the final design is a separate decision (the tool should run whichever strategy the report presents as the model).

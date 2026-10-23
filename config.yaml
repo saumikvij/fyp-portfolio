@@ -109,6 +109,14 @@ phase4:
   table_dir: report/tables
   figure_dir: report/figures
 
+final_design:                  # D6 (23 Oct 2026): chosen after the experiment branch; see DECISIONS D6
+  view_models: [elastic_net, lightgbm]   # Phase 3 forecasts, averaged into one view set
+  risk_model: true             # Σ = D·R·D with elastic-net volatility forecasts (src.risk_model)
+  omega: A
+  gamma: medium
+  subperiod_end: "2021-12-31"  # results also reported for 2016–2021 and 2022–2026
+  table_dir: report/tables
+
 recommend:                     # Phase 5 tool (plan Section 2.6)
   as_of: null                  # null = last month-end in the data
   # Worked examples for the report (reproducible: same data + config -> same output).
