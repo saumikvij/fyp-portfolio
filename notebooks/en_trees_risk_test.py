@@ -1,7 +1,8 @@
 """EXPERIMENT (branch experiment/model-search): elastic net + tree models as Black–Litterman
 views, with the ML risk matrix (DECISIONS FN1). Student's proposed final design.
 
-Run:  python -m notebooks.en_trees_risk_test
+Run:  python -m notebooks.en_trees_risk_test               # EN + 4 tree models (FN1)
+      python -m notebooks.en_trees_risk_test --lightgbm    # EN + LightGBM only (FN2)
 
 51 stocks, monthly, γ = 5, τ = 0.05, Ω-A, 10 bps. Views: Phase 3 elastic net and LightGBM,
 plus random forest, hist gradient boosting and extra trees (search setups: expanding
@@ -12,6 +13,7 @@ one view set. Σ: sample, or D·R·D with elastic-net volatility forecasts (MS15
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import pandas as pd
@@ -27,6 +29,11 @@ OUT = Path("report/experiments")
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--lightgbm", action="store_true", help="EN + LightGBM only (FN2)")
+    only_lgbm = ap.parse_args().lightgbm
+    tag = "en_lgbm_risk" if only_lgbm else "en_trees_risk"
+    label = "EN + LightGBM" if only_lgbm else "EN + trees"
     cfg = load_config()
     ms, bt = cfg["model_search"], cfg["backtest"]
     data = load_processed(cfg)
@@ -38,10 +45,10 @@ def main() -> None:
     p3, sd = Path(cfg["phase3"]["forecast_dir"]), Path(ms["out_dir"])
     views = {"Elastic net": pd.read_parquet(p3 / "forecasts_elastic_net.parquet"),
              "LightGBM": pd.read_parquet(p3 / "forecasts_lightgbm.parquet")}
-    for fam in ("random_forest", "hist_gradient_boosting", "extra_trees"):
+    for fam in ([] if only_lgbm else ["random_forest", "hist_gradient_boosting", "extra_trees"]):
         views[fam] = pd.read_parquet(sd / f"{fam}__expanding__raw__base.parquet")
     views = {k: v.reindex(index=dates, columns=stocks) for k, v in views.items()}
-    avg = {"EN + trees (average)": sum(views.values()) / len(views)}
+    avg = {f"{label} (average)": sum(views.values()) / len(views)}
     vol = vol_forecasts(data, stocks, dates, cfg, Path(cfg["data"]["raw_dir"]) / "prices_raw.parquet")
 
     def s(v, ml_sigma=False):
@@ -51,10 +58,10 @@ def main() -> None:
         "No AI views, sample Σ": s({}),
         "No AI views, AI risk Σ": s({}, True),
         "Elastic net only (Phase 4)": s({"Elastic net": views["Elastic net"]}),
-        "EN + trees stacked": s(views),
-        "EN + trees stacked, AI risk Σ": s(views, True),
-        "EN + trees averaged": s(avg),
-        "EN + trees averaged, AI risk Σ": s(avg, True),
+        f"{label} stacked": s(views),
+        f"{label} stacked, AI risk Σ": s(views, True),
+        f"{label} averaged": s(avg),
+        f"{label} averaged, AI risk Σ": s(avg, True),
     }
     rows, nets = [], {}
     for name, strat in strategies.items():
@@ -73,7 +80,7 @@ def main() -> None:
         rows.append(row)
         print(f"{name:34s} done", flush=True)
     table = pd.DataFrame(rows)
-    table.to_csv(OUT / "en_trees_risk.csv", index=False)
+    table.to_csv(OUT / f"{tag}.csv", index=False)
 
     base = "No AI views, sample Σ"
     tests = []
@@ -90,7 +97,7 @@ def main() -> None:
                           "boot_p": boot["p_value"]})
     tests = pd.DataFrame(tests)
     tests["boot_p_holm"] = holm_adjust(tests["boot_p"])
-    tests.to_csv(OUT / "en_trees_risk_tests.csv", index=False)
+    tests.to_csv(OUT / f"{tag}_tests.csv", index=False)
     pd.set_option("display.width", 250)
     cols = ["strategy", "dev_return", "hold_return", "all_return", "growth_10k", "dev_sharpe",
             "hold_sharpe", "all_vol", "hold_max_dd_daily", "all_cvar95", "avg_turnover"]

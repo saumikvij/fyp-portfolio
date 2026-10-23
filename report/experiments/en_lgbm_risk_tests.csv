@@ -1,0 +1,19 @@
+strategy,period,sharpe_diff,boot_p,boot_p_holm
+"No AI views, AI risk Σ",dev,-0.019225598366343476,0.7086,1.0
+"No AI views, AI risk Σ",hold,-0.10197935207498159,0.1721,1.0
+"No AI views, AI risk Σ",all,-0.056248922547028096,0.2083,1.0
+Elastic net only (Phase 4),dev,-0.06839400131830543,0.5331,1.0
+Elastic net only (Phase 4),hold,-0.13398976687745592,0.1494,1.0
+Elastic net only (Phase 4),all,-0.08788797669775454,0.2319,1.0
+EN + LightGBM stacked,dev,-0.07098871928927245,0.6106,1.0
+EN + LightGBM stacked,hold,-0.23816148084554956,0.0924,1.0
+EN + LightGBM stacked,all,-0.13250507817404444,0.1771,1.0
+"EN + LightGBM stacked, AI risk Σ",dev,-0.03301354118317649,0.7941,1.0
+"EN + LightGBM stacked, AI risk Σ",hold,-0.1792326286651768,0.2047,1.0
+"EN + LightGBM stacked, AI risk Σ",all,-0.08733859342835054,0.3491,1.0
+EN + LightGBM averaged,dev,-0.05077991352315239,0.6395,1.0
+EN + LightGBM averaged,hold,-0.1326266037543686,0.111,1.0
+EN + LightGBM averaged,all,-0.07716176197515706,0.2724,1.0
+"EN + LightGBM averaged, AI risk Σ",dev,-0.05296543456150486,0.6333,1.0
+"EN + LightGBM averaged, AI risk Σ",hold,-0.1039291755087249,0.2721,1.0
+"EN + LightGBM averaged, AI risk Σ",all,-0.06517175953705998,0.3699,1.0
