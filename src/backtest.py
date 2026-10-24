@@ -26,7 +26,7 @@ import pandas as pd
 
 from src.black_litterman import bl_inputs
 from src.estimators import historical_mean, sample_covariance
-from src.optimization import Constraints, mean_variance, min_variance
+from src.optimization import Constraints, mean_variance, min_variance, rule_sector_bounds
 
 
 @dataclass
@@ -253,10 +253,27 @@ def _sigma(hist: History, stocks: list[str], cfg: dict) -> pd.DataFrame:
                              cfg["data"]["trading_days_per_year"] / 12)
 
 
-def _constraints(hist: History, cfg: dict) -> Constraints:
-    bounds = {k: tuple(v) for k, v in (cfg["optimization"]["sector_bounds"] or {}).items()}
-    return Constraints(long_only=True, w_max=cfg["backtest"]["w_max"],
-                       sectors=hist.sectors, sector_bounds=bounds)
+def strategy_constraints(hist: History, cfg: dict) -> Constraints:
+    """Constraints of every optimized strategy (S3–S6) and of the recommendation tool.
+
+    Long-only, at most ``backtest.w_max`` per stock, and the sector rule (A4): no
+    sector above ``optimization.sector_max`` of the portfolio. One function for the
+    backtest and the tool, so the tool always runs the strategy that was evaluated.
+
+    Parameters
+    ----------
+    hist : History at t (its ``sectors`` are used).
+    cfg : config.
+
+    Returns
+    -------
+    Constraints for ``mean_variance`` / ``min_variance``.
+
+    Theorem: T1, T4 (the feasible set of the main problem).
+    """
+    return Constraints(long_only=True, w_max=cfg["backtest"]["w_max"], sectors=hist.sectors,
+                       sector_bounds=rule_sector_bounds(hist.sectors,
+                                                        cfg["optimization"].get("sector_max")))
 
 
 def min_variance_strategy(stocks: list[str], cfg: dict) -> Strategy:
@@ -275,7 +292,7 @@ def min_variance_strategy(stocks: list[str], cfg: dict) -> Strategy:
     """
     def strategy(hist: History) -> pd.Series:
         Sigma = _sigma(hist, stocks, cfg)
-        return min_variance(Sigma, _constraints(hist, cfg),
+        return min_variance(Sigma, strategy_constraints(hist, cfg),
                             cfg["optimization"]["solver"]).weights
     return strategy
 
@@ -299,7 +316,7 @@ def markowitz_strategy(stocks: list[str], cfg: dict, gamma: float) -> Strategy:
         Sigma = _sigma(hist, stocks, cfg)
         mu = historical_mean(hist.returns_monthly[stocks], hist.t,
                              cfg["estimators"]["mean_window_months"])
-        return mean_variance(mu, Sigma, gamma, _constraints(hist, cfg),
+        return mean_variance(mu, Sigma, gamma, strategy_constraints(hist, cfg),
                              cfg["optimization"]["solver"]).weights
     return strategy
 
@@ -327,7 +344,7 @@ def forecast_strategy(forecasts: pd.DataFrame, stocks: list[str], cfg: dict,
     """
     def strategy(hist: History) -> pd.Series:
         mu = forecasts.loc[hist.t, stocks]
-        return mean_variance(mu, _sigma(hist, stocks, cfg), gamma, _constraints(hist, cfg),
+        return mean_variance(mu, _sigma(hist, stocks, cfg), gamma, strategy_constraints(hist, cfg),
                              cfg["optimization"]["solver"]).weights
     return strategy
 
@@ -367,6 +384,6 @@ def black_litterman_strategy(forecasts: pd.DataFrame, ensemble_var: pd.DataFrame
         inp = bl_inputs(hist, forecasts, ensemble_var, stocks, cfg, omega_kind, tau,
                         omega_scale, vol_forecasts)
         mu = inp["mu_bl"] if views else inp["Pi"]
-        return mean_variance(mu, inp["Sigma"], gamma, _constraints(hist, cfg),
+        return mean_variance(mu, inp["Sigma"], gamma, strategy_constraints(hist, cfg),
                              cfg["optimization"]["solver"]).weights
     return strategy

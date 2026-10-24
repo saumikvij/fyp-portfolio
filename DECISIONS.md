@@ -412,3 +412,31 @@ The experiments of 17–23 Oct ran on the git branch `experiment/model-search` (
 
 ### D6.4 Not changed (yet)
 - The Phase 5 tool still runs the Phase 4 headline; switching it to the final design is a separate decision (the tool should run whichever strategy the report presents as the model).
+
+## A4 implemented (24 Oct 2026): sector rule in the tool and the backtest, and one complete example
+
+Advisor (meeting after the Phase 5 report): document one complete example from input to recommendation, and apply the proposed sector constraint consistently to both the tool and its backtest, before expanding into volatility forecasting.
+
+### A4.1 What changed
+- **One rule, one place:** `optimization.sector_max: 0.25` in `config.yaml`; `src.optimization.rule_sector_bounds` turns it into (0, 25%) for every sector, and `src.backtest.strategy_constraints` (long-only, ≤ 10% per stock, the sector rule) is used by every optimized strategy (S3–S6) **and** by the tool. The old empty `sector_bounds` setting is removed.
+- **Tool:** the user gives only the amount and the risk tolerance. The sector preferences (`--exclude`, `--max-sector`, `--min-sector`), the minimum-sector refill in the whole-share step, and their tests are removed. Requests are still checked (amount > 0, known risk level) and a rule that leaves room for < 100% is rejected.
+- **Consistency test:** at three dates (2019-03-29, 2022-06-30 and the latest), the tool's target weights equal the weights the backtested S6 strategy holds from that date (difference < 1e-9).
+- **Worked example:** `notebooks/phase5_walkthrough.py` writes `report/phase5_walkthrough.md`: $10,000, medium risk, as of 2026-08-31, every step from input to whole shares (γ, forecasts, Π, Ω-A, μ_BL, the binding limits, the KKT check, holdings, checks). The worked examples in config are now amount + risk only (A–E).
+- **Toy tests:** the synthetic data has 2 sectors, where a 25% cap is infeasible; those tests use a 60% cap so the rule is still exercised.
+
+### A4.2 How often the rule binds (correcting A4)
+A4 said the rule "rarely binds", from one date (IT at 23.3%). Over the whole backtest, without the rule: S6 headline above 25% in one sector in 14 of 128 months (up to 29.9%); S5 elastic net 58 months (44.3%); S4 Markowitz γ = 5 74 months and γ = 2 109 months (40%); BL prior γ = 2 109 months (49.9%). In the walkthrough example (medium risk, Aug 2026) no sector binds; at high risk Consumer Discretionary is held at exactly 25%.
+
+### A4.3 Results after re-running Phases 2–5 and the final design (2016–2026, 10 bps)
+| Strategy | Sharpe before → after | Return a year before → after | Max drawdown (daily) before → after |
+|---|---|---|---|
+| BL prior only (γ = 5) | 0.963 → 0.964 | 14.6% → 14.5% | 27.8% → 27.8% |
+| **S6 headline (elastic net, Ω-A, γ = 5)** | 0.876 → 0.872 | 13.8% → 13.8% | 31.5% → 31.5% |
+| S6 elastic net, γ = 2 | 0.999 → 0.962 | 19.7% → 18.9% | 32.9% → 35.3% |
+| S4 Markowitz γ = 5 | 0.876 → 0.906 | 15.5% → 15.9% | 30.6% → 29.4% |
+| S4 Markowitz γ = 2 | 0.947 → 1.018 | 18.3% → 19.5% | 30.9% → 30.0% |
+| S5 elastic net γ = 5 | 0.693 → 0.706 | 10.8% → 11.0% | 29.7% → 29.9% |
+| Final design (D6) | 0.898 → 0.897 | 14.3% → 14.3% | 31.6% → 31.6% |
+
+- S1 and S2 are unchanged (not optimized). The headline and the final design barely move; Markowitz improves (the rule removes some of its concentration); the high-risk BL portfolio loses some return. Monthly simulation from $10,000 (Dec 2015): low risk $34,450 → $34,700, medium $39,779 → $39,793, high $66,824 → $62,012.
+- No paired Sharpe test changes its conclusion (all Holm-adjusted p stay at 0.82–1.0). Every Phase 2–5 table and figure in `report/` now includes the rule.

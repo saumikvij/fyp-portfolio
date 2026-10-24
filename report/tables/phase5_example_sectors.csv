@@ -1,67 +1,56 @@
-sector,target,held,scenario,min,max
-Information Technology,0.232941445362585,0.19138200149536133,"A: $10,000, medium risk, no preferences",,
-Consumer Discretionary,0.11100962430142311,0.13937299728393554,"A: $10,000, medium risk, no preferences",,
-Communication Services,0.10738827672843879,0.1069410020828247,"A: $10,000, medium risk, no preferences",,
-Financials,0.09380044980877435,0.06771299858093262,"A: $10,000, medium risk, no preferences",,
-Utilities,0.08817563384726443,0.09234099960327148,"A: $10,000, medium risk, no preferences",,
-Consumer Staples,0.08248868364012193,0.06887399978637695,"A: $10,000, medium risk, no preferences",,
-Health Care,0.08170972237005959,0.09528499908447266,"A: $10,000, medium risk, no preferences",,
-Real Estate,0.06190014291059908,0.07625299835205078,"A: $10,000, medium risk, no preferences",,
-Industrials,0.051906761152063094,0.061843001556396486,"A: $10,000, medium risk, no preferences",,
-Energy,0.04873992617093634,0.04737399978637695,"A: $10,000, medium risk, no preferences",,
-Materials,0.03993933370773423,0.0,"A: $10,000, medium risk, no preferences",,
-Information Technology,0.20000251881100709,0.19138200149536133,"B: $10,000, medium risk, no Energy, IT at most 20%",0.0,0.2
-Consumer Discretionary,0.12916073083474755,0.11440199890136718,"B: $10,000, medium risk, no Energy, IT at most 20%",,
-Communication Services,0.11039574377259902,0.11460500221252441,"B: $10,000, medium risk, no Energy, IT at most 20%",,
-Financials,0.10728801264549909,0.07390699844360352,"B: $10,000, medium risk, no Energy, IT at most 20%",,
-Consumer Staples,0.10382405234182539,0.07209599990844726,"B: $10,000, medium risk, no Energy, IT at most 20%",,
-Utilities,0.08774094756250841,0.08354099960327148,"B: $10,000, medium risk, no Energy, IT at most 20%",,
-Health Care,0.08033909756368637,0.08050899963378906,"B: $10,000, medium risk, no Energy, IT at most 20%",,
-Industrials,0.07221063004524234,0.040490001678466794,"B: $10,000, medium risk, no Energy, IT at most 20%",,
-Real Estate,0.06599253292755046,0.04555399932861328,"B: $10,000, medium risk, no Energy, IT at most 20%",,
-Materials,0.04304573349533416,0.043551998901367184,"B: $10,000, medium risk, no Energy, IT at most 20%",,
-Energy,0.0,0.0,"B: $10,000, medium risk, no Energy, IT at most 20%",0.0,0.0
-Information Technology,0.2000007418415155,0.1856580001831055,"C: $10,000, low risk, same preferences as B",0.0,0.2
-Consumer Staples,0.1665690380326213,0.21322499923706054,"C: $10,000, low risk, same preferences as B",,
-Utilities,0.15350106310751427,0.15256400299072267,"C: $10,000, low risk, same preferences as B",,
-Financials,0.09745747188746764,0.09958899955749512,"C: $10,000, low risk, same preferences as B",,
-Health Care,0.08311418501826197,0.07593800048828125,"C: $10,000, low risk, same preferences as B",,
-Industrials,0.07763445567866006,0.05091300201416016,"C: $10,000, low risk, same preferences as B",,
-Consumer Discretionary,0.07278908463028835,0.05623699989318848,"C: $10,000, low risk, same preferences as B",,
-Communication Services,0.06889404306761204,0.06927100105285644,"C: $10,000, low risk, same preferences as B",,
-Materials,0.042705594381113925,0.030945999145507812,"C: $10,000, low risk, same preferences as B",,
-Real Estate,0.037334322354944834,0.052794000244140625,"C: $10,000, low risk, same preferences as B",,
-Energy,0.0,0.0,"C: $10,000, low risk, same preferences as B",0.0,0.0
-Consumer Discretionary,0.2670208778534975,0.2355599956512451,"D: $10,000, high risk, same preferences as B",,
-Information Technology,0.20000324309753226,0.16128900146484376,"D: $10,000, high risk, same preferences as B",0.0,0.2
-Communication Services,0.14135671927307664,0.11089000244140625,"D: $10,000, high risk, same preferences as B",,
-Financials,0.1373692268179254,0.08638999938964843,"D: $10,000, high risk, same preferences as B",,
-Materials,0.10687555686383593,0.0929739990234375,"D: $10,000, high risk, same preferences as B",,
-Real Estate,0.10413755947214651,0.1033739974975586,"D: $10,000, high risk, same preferences as B",,
-Health Care,0.04323681662198575,0.04432799835205078,"D: $10,000, high risk, same preferences as B",,
-Consumer Staples,0.0,0.0,"D: $10,000, high risk, same preferences as B",,
-Energy,0.0,0.0,"D: $10,000, high risk, same preferences as B",0.0,0.0
-Industrials,0.0,0.0,"D: $10,000, high risk, same preferences as B",,
-Utilities,0.0,0.0,"D: $10,000, high risk, same preferences as B",,
-Information Technology,0.20000251881100709,0.1996461611328125,"E: $250,000, medium risk, same preferences as B",0.0,0.2
-Consumer Discretionary,0.12916073083474755,0.12988375801086427,"E: $250,000, medium risk, same preferences as B",,
-Communication Services,0.11039574377259902,0.11063464217376709,"E: $250,000, medium risk, same preferences as B",,
-Financials,0.10728801264549909,0.1065497191772461,"E: $250,000, medium risk, same preferences as B",,
-Consumer Staples,0.10382405234182539,0.10208267993164062,"E: $250,000, medium risk, same preferences as B",,
-Utilities,0.08774094756250841,0.0877141993713379,"E: $250,000, medium risk, same preferences as B",,
-Health Care,0.08033909756368637,0.0813885991821289,"E: $250,000, medium risk, same preferences as B",,
-Industrials,0.07221063004524234,0.07022852087402344,"E: $250,000, medium risk, same preferences as B",,
-Real Estate,0.06599253292755046,0.06520407885742188,"E: $250,000, medium risk, same preferences as B",,
-Materials,0.04304573349533416,0.04283599963378906,"E: $250,000, medium risk, same preferences as B",,
-Energy,0.0,0.0,"E: $250,000, medium risk, same preferences as B",0.0,0.0
-Information Technology,0.23221747829330594,0.19138200149536133,"F: $10,000, medium risk, at least 15% Health Care",,
-Health Care,0.15000170914925587,0.1741470001220703,"F: $10,000, medium risk, at least 15% Health Care",0.15,1.0
-Consumer Discretionary,0.10689461348324701,0.0763299976348877,"F: $10,000, medium risk, at least 15% Health Care",,
-Communication Services,0.10104817979638839,0.10427900199890136,"F: $10,000, medium risk, at least 15% Health Care",,
-Financials,0.09059363278522369,0.07015799865722655,"F: $10,000, medium risk, at least 15% Health Care",,
-Utilities,0.08500646859890522,0.09014199981689452,"F: $10,000, medium risk, at least 15% Health Care",,
-Consumer Staples,0.05887758639105523,0.04549500045776367,"F: $10,000, medium risk, at least 15% Health Care",,
-Real Estate,0.0523995451374429,0.06226099853515625,"F: $10,000, medium risk, at least 15% Health Care",,
-Energy,0.049783150165661275,0.04737399978637695,"F: $10,000, medium risk, at least 15% Health Care",,
-Industrials,0.04293231570998929,0.05142000122070313,"F: $10,000, medium risk, at least 15% Health Care",,
-Materials,0.030245320489525235,0.0,"F: $10,000, medium risk, at least 15% Health Care",,
+sector,target,held,max,scenario
+Information Technology,0.2329369888615752,0.19138200149536133,0.25,"A: $10,000, medium risk"
+Consumer Discretionary,0.11101502019184475,0.13937299728393554,0.25,"A: $10,000, medium risk"
+Communication Services,0.1074104244744318,0.1069410020828247,0.25,"A: $10,000, medium risk"
+Financials,0.09384127562845107,0.06771299858093262,0.25,"A: $10,000, medium risk"
+Utilities,0.08817899792853041,0.09234099960327148,0.25,"A: $10,000, medium risk"
+Consumer Staples,0.08250194193650158,0.06887399978637695,0.25,"A: $10,000, medium risk"
+Health Care,0.08174907732187864,0.09528499908447266,0.25,"A: $10,000, medium risk"
+Real Estate,0.06179807241774432,0.07625299835205078,0.25,"A: $10,000, medium risk"
+Industrials,0.05189400262074652,0.061843001556396486,0.25,"A: $10,000, medium risk"
+Energy,0.048734020486735086,0.04737399978637695,0.25,"A: $10,000, medium risk"
+Materials,0.03994017813156055,0.0,0.25,"A: $10,000, medium risk"
+Information Technology,0.22077601253345916,0.21734300079345706,0.25,"B: $10,000, low risk"
+Consumer Staples,0.14242467263693148,0.10674699783325195,0.25,"B: $10,000, low risk"
+Utilities,0.13141370668557953,0.13233900299072265,0.25,"B: $10,000, low risk"
+Energy,0.08158888778441539,0.07793699951171876,0.25,"B: $10,000, low risk"
+Financials,0.07742450132634135,0.030969999313354493,0.25,"B: $10,000, low risk"
+Health Care,0.07231722306749977,0.07309200057983398,0.25,"B: $10,000, low risk"
+Industrials,0.0647541164163405,0.02084600067138672,0.25,"B: $10,000, low risk"
+Communication Services,0.06321589252051298,0.05426500091552734,0.25,"B: $10,000, low risk"
+Consumer Discretionary,0.06227434647542146,0.05233099975585938,0.25,"B: $10,000, low risk"
+Real Estate,0.045250577941818575,0.06003400115966796,0.25,"B: $10,000, low risk"
+Materials,0.038560062611679664,0.030945999145507812,0.25,"B: $10,000, low risk"
+Consumer Discretionary,0.24976664485331307,0.23165399551391602,0.25,"C: $10,000, high risk"
+Information Technology,0.20393677132278085,0.21201800231933593,0.25,"C: $10,000, high risk"
+Communication Services,0.14451053039158004,0.11089000244140625,0.25,"C: $10,000, high risk"
+Financials,0.12000614895694331,0.07775099945068359,0.25,"C: $10,000, high risk"
+Materials,0.11233732067382714,0.08036799926757812,0.25,"C: $10,000, high risk"
+Real Estate,0.08496732773739005,0.08938199768066406,0.25,"C: $10,000, high risk"
+Energy,0.0495062831368438,0.048079998779296876,0.25,"C: $10,000, high risk"
+Health Care,0.034968972927321734,0.02955199890136719,0.25,"C: $10,000, high risk"
+Consumer Staples,0.0,0.0,0.25,"C: $10,000, high risk"
+Industrials,0.0,0.0,0.25,"C: $10,000, high risk"
+Utilities,0.0,0.0,0.25,"C: $10,000, high risk"
+Information Technology,0.2329369888615752,0.2324675616760254,0.25,"D: $250,000, medium risk"
+Consumer Discretionary,0.11101502019184475,0.11132107788085938,0.25,"D: $250,000, medium risk"
+Communication Services,0.1074104244744318,0.1070847621383667,0.25,"D: $250,000, medium risk"
+Financials,0.09384127562845107,0.09449279928588866,0.25,"D: $250,000, medium risk"
+Utilities,0.08817899792853041,0.08812511987304687,0.25,"D: $250,000, medium risk"
+Consumer Staples,0.08250194193650158,0.08184027984619141,0.25,"D: $250,000, medium risk"
+Health Care,0.08174907732187864,0.08201755917358398,0.25,"D: $250,000, medium risk"
+Real Estate,0.06179807241774432,0.061148878723144534,0.25,"D: $250,000, medium risk"
+Industrials,0.05189400262074652,0.0514220407409668,0.25,"D: $250,000, medium risk"
+Energy,0.048734020486735086,0.04868983972167969,0.25,"D: $250,000, medium risk"
+Materials,0.03994017813156055,0.041357520141601566,0.25,"D: $250,000, medium risk"
+Information Technology,0.2329369888615752,0.0,0.25,"E: $2,000, medium risk"
+Consumer Discretionary,0.11101502019184475,0.0,0.25,"E: $2,000, medium risk"
+Communication Services,0.1074104244744318,0.03832000064849853,0.25,"E: $2,000, medium risk"
+Financials,0.09384127562845107,0.04319499969482422,0.25,"E: $2,000, medium risk"
+Utilities,0.08817899792853041,0.11817499923706054,0.25,"E: $2,000, medium risk"
+Consumer Staples,0.08250194193650158,0.05243500137329102,0.25,"E: $2,000, medium risk"
+Health Care,0.08174907732187864,0.014229999542236329,0.25,"E: $2,000, medium risk"
+Real Estate,0.06179807241774432,0.0,0.25,"E: $2,000, medium risk"
+Industrials,0.05189400262074652,0.0,0.25,"E: $2,000, medium risk"
+Energy,0.048734020486735086,0.030049999237060546,0.25,"E: $2,000, medium risk"
+Materials,0.03994017813156055,0.0,0.25,"E: $2,000, medium risk"

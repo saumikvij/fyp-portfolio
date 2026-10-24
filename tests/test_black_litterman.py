@@ -186,7 +186,8 @@ def test_s6_backtest_unchanged_by_future_data_and_respects_constraints(toy):
     t = dates[10]
     moved = {k: (perturb_after(x, t) if k not in ("sectors", "shares_outstanding") else x)
              for k, x in toy.items()}
-    cfg = {**CFG, "backtest": {**CFG["backtest"], "w_max": 0.4}}
+    cfg = {**CFG, "backtest": {**CFG["backtest"], "w_max": 0.4},
+           "optimization": {**CFG["optimization"], "sector_max": 0.6}}   # toy: 2 sectors
     wt = CFG["optimization"]["weight_tol"]
     a = run_backtest("a", black_litterman_strategy(f, v, stocks, cfg, 5.0, "A", TAU),
                      toy, dates, wt)
@@ -195,13 +196,16 @@ def test_s6_backtest_unchanged_by_future_data_and_respects_constraints(toy):
                      moved, dates, wt)
     pd.testing.assert_frame_equal(a.weights.loc[:t], b.weights.loc[:t])
     assert (a.weights >= 0).all().all() and (a.weights <= 0.4 + wt).all().all()
+    by_sector = a.weights.T.groupby(toy["sectors"]["sector"]).sum().T
+    assert (by_sector <= 0.6 + wt).all().all()                          # the sector rule
 
 
 def test_views_false_uses_prior_only(toy):
     """views=False is the Ω → ∞ limit: same weights as Ω scaled by 1e12."""
     stocks, f, v = toy_forecasts(toy)
     dates = toy["returns_monthly"].index[25:28]
-    cfg = {**CFG, "backtest": {**CFG["backtest"], "w_max": 0.4}}
+    cfg = {**CFG, "backtest": {**CFG["backtest"], "w_max": 0.4},
+           "optimization": {**CFG["optimization"], "sector_max": 0.6}}   # toy: 2 sectors
     wt = CFG["optimization"]["weight_tol"]
     prior = run_backtest("p", black_litterman_strategy(f, v, stocks, cfg, 5.0, "A", TAU,
                                                        views=False), toy, dates, wt)

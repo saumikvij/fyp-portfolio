@@ -26,7 +26,8 @@ estimators:
 
 optimization:
   solver: CLARABEL             # cvxpy interior-point QP solver
-  sector_bounds: {}            # default: none. e.g. {Energy: [0.0, 0.0]} excludes energy
+  sector_max: 0.25             # A4: no sector above 25% of the portfolio, none excluded; applies to
+                               # every optimized strategy (S3–S6) and to the tool. null = no sector rule
   kkt_tol: 1.0e-6              # tolerance when checking KKT conditions (T4)
   weight_tol: 1.0e-5           # a weight this close to a bound counts as at the bound
 
@@ -120,34 +121,24 @@ final_design:                  # D6 (23 Oct 2026): chosen after the experiment b
 recommend:                     # Phase 5 tool (plan Section 2.6)
   as_of: null                  # null = last month-end in the data
   # Worked examples for the report (reproducible: same data + config -> same output).
+  # The user gives only an amount and a risk tolerance (A4); A is the walkthrough example.
   examples:
-    - name: "A: $10,000, medium risk, no preferences"
+    - name: "A: $10,000, medium risk"
       amount: 10000
       risk: medium
-    - name: "B: $10,000, medium risk, no Energy, IT at most 20%"
-      amount: 10000
-      risk: medium
-      exclude: [Energy]
-      max_sector: {Information Technology: 0.20}
-    - name: "C: $10,000, low risk, same preferences as B"
+    - name: "B: $10,000, low risk"
       amount: 10000
       risk: low
-      exclude: [Energy]
-      max_sector: {Information Technology: 0.20}
-    - name: "D: $10,000, high risk, same preferences as B"
+    - name: "C: $10,000, high risk"
       amount: 10000
       risk: high
-      exclude: [Energy]
-      max_sector: {Information Technology: 0.20}
-    - name: "E: $250,000, medium risk, same preferences as B"
+    - name: "D: $250,000, medium risk"
       amount: 250000
       risk: medium
-      exclude: [Energy]
-      max_sector: {Information Technology: 0.20}
-    - name: "F: $10,000, medium risk, at least 15% Health Care"
-      amount: 10000
+    - name: "E: $2,000, medium risk"
+      amount: 2000
       risk: medium
-      min_sector: {Health Care: 0.15}
+  walkthrough: "A: $10,000, medium risk"
 
 phase5:
   table_dir: report/tables

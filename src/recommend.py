@@ -1,40 +1,42 @@
 """Portfolio recommendation tool (plan Sections 1, 2.6; Phase 5).
 
-A user gives an investment amount, a risk tolerance (low / medium / high) and optional
-sector preferences. The tool returns a simulated portfolio of whole shares, using the
-headline Black–Litterman model fixed in Phase 4 (D4.1):
+A user gives an investment amount and a risk tolerance (low / medium / high); the
+sector rule is chosen by us, not the user (A4: no sector above 25%, set in config).
+The tool returns a simulated portfolio of whole shares, using the headline
+Black–Litterman model fixed in Phase 4 (D4.1), with exactly the constraints of the
+backtested strategy (``src.backtest.strategy_constraints``):
 
 1. Forecasts: the headline ML model is run with the same chronological walk-forward
    procedure as Phase 3, up to and including the recommendation date t.
 2. μ_BL at t: market prior Π = δΣw_mkt combined with the forecasts (T6), with Ω from
    past forecast errors (Ω-A).
-3. Target weights: max μ_BLᵀw − (γ/2)wᵀΣw subject to 1ᵀw = 1, 0 ≤ wᵢ ≤ w_max and the
-   user's sector bounds, with γ set by the risk tolerance (10 / 5 / 2).
+3. Target weights: max μ_BLᵀw − (γ/2)wᵀΣw subject to 1ᵀw = 1, 0 ≤ wᵢ ≤ w_max and every
+   sector ≤ sector_max, with γ set by the risk tolerance (10 / 5 / 2). These are the
+   backtest's S6 weights at t (tested).
 4. Whole shares: weights × amount ÷ the close price at t, rounded down; leftover cash
    then buys single shares where the target is most under-filled, never breaking a cap.
 
 Every input is read from data dated <= t, so a recommendation "as of" a past date is
 exactly what the tool would have said then (tested). No trades are placed.
 
-Run:  python -m src.recommend --amount 10000 --risk medium --exclude Energy \\
-          --max-sector "Information Technology=0.2"
+Run:  python -m src.recommend --amount 10000 --risk medium
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 
 import numpy as np
 import pandas as pd
 
-from src.backtest import History, history_at
+from src.backtest import History, history_at, strategy_constraints
 from src.black_litterman import bl_inputs
 from src.data import load_config, load_processed
 from src.features import add_targets, build_feature_panel, rank_normalize
 from src.models import ElasticNetModel, LightGBMModel, MLPModel, walk_forward
-from src.optimization import Constraints, mean_variance
+from src.optimization import mean_variance, rule_sector_bounds
 
 
 @dataclass
@@ -45,57 +47,44 @@ class UserRequest:
     ----------
     amount : investment amount in dollars (> 0).
     risk : "low", "medium" or "high" (maps to γ via config ``risk_tolerance``).
-    exclude : sectors to hold nothing in.
-    max_sector : {sector: maximum total weight}.
-    min_sector : {sector: minimum total weight}.
     """
 
     amount: float
     risk: str
-    exclude: list[str] = field(default_factory=list)
-    max_sector: dict[str, float] = field(default_factory=dict)
-    min_sector: dict[str, float] = field(default_factory=dict)
 
 
-def sector_bounds(req: UserRequest) -> dict[str, tuple[float, float]]:
-    """Turn the user's preferences into the optimizer's {sector: (lower, upper)} bounds.
+def sector_bounds(sectors: pd.Series, cfg: dict) -> dict[str, tuple[float, float]]:
+    """The sector rule from config as {sector: (0, sector_max)} (A4; the user sets none).
 
     Parameters
     ----------
-    req : the user request.
+    sectors : ticker -> sector.
+    cfg : config (``optimization.sector_max``).
 
     Returns
     -------
-    Bounds for every sector the user mentioned: lower = the minimum (default 0), upper
-    = 0 if excluded, else the maximum (default 1). Values are passed through unchanged
-    so ``validate_request`` can reject impossible ones (e.g. a maximum of 150%).
+    The same bounds the backtest uses (``src.optimization.rule_sector_bounds``).
 
     Theorem: none (constraint set of the main problem, plan 2.2).
     """
-    bounds: dict[str, tuple[float, float]] = {}
-    for s in set(req.exclude) | set(req.max_sector) | set(req.min_sector):
-        lo = req.min_sector.get(s, 0.0)
-        hi = 0.0 if s in req.exclude else req.max_sector.get(s, 1.0)
-        bounds[s] = (lo, hi)
-    return bounds
+    return rule_sector_bounds(sectors, cfg["optimization"].get("sector_max"))
 
 
 def validate_request(req: UserRequest, sectors: pd.Series, cfg: dict) -> None:
-    """Reject requests that are malformed or cannot be satisfied, with a clear reason.
+    """Reject requests that are malformed, and a configuration that cannot be met.
 
-    Checks: amount > 0; known risk level; known sector names; bounds within [0, 1]
-    with lower ≤ upper; minimums summing to at most 1; and that the allowed stocks
-    can hold 100% under the per-stock cap and the sector maximums.
+    Checks: amount > 0; a known risk level; and that the per-stock cap and the sector
+    rule together leave room for 100% of the portfolio (else no portfolio exists).
 
     Parameters
     ----------
     req : the user request.
     sectors : ticker -> sector.
-    cfg : config (risk levels, w_max).
+    cfg : config (risk levels, w_max, sector_max).
 
     Raises
     ------
-    ValueError explaining what to change.
+    ValueError explaining what is wrong.
 
     Theorem: none (feasibility of the constraint set; T1 needs it non-empty).
     """
@@ -103,30 +92,14 @@ def validate_request(req: UserRequest, sectors: pd.Series, cfg: dict) -> None:
         raise ValueError("The investment amount must be positive.")
     if req.risk not in cfg["risk_tolerance"]:
         raise ValueError(f"Risk tolerance must be one of {list(cfg['risk_tolerance'])}.")
-    known = set(sectors)
-    named = set(req.exclude) | set(req.max_sector) | set(req.min_sector)
-    if named - known:
-        raise ValueError(f"Unknown sector(s) {sorted(named - known)}. Choose from {sorted(known)}.")
-    bounds = sector_bounds(req)
-    for s, (lo, hi) in bounds.items():
-        if not (0 <= lo <= 1 and 0 <= hi <= 1):
-            raise ValueError(f"Bounds for {s} must be between 0 and 1.")
-        if lo > hi:
-            raise ValueError(f"{s}: the minimum ({lo:.0%}) is above the maximum ({hi:.0%}).")
-    if sum(lo for lo, _ in bounds.values()) > 1 + 1e-12:
-        raise ValueError("The sector minimums add up to more than 100%.")
     w_max = cfg["backtest"]["w_max"]
-    capacity = 0.0
-    for s in known:
-        n = int((sectors == s).sum())
-        lo, hi = bounds.get(s, (0.0, 1.0))
-        cap_s = min(hi, n * w_max)
-        if lo > cap_s + 1e-12:
-            raise ValueError(f"{s} cannot reach {lo:.0%}: it has {n} stocks capped at {w_max:.0%} each.")
-        capacity += cap_s
+    bounds = sector_bounds(sectors, cfg)
+    capacity = sum(min(bounds.get(s, (0.0, 1.0))[1], int((sectors == s).sum()) * w_max)
+                   for s in set(sectors))
     if capacity < 1 - 1e-12:
-        raise ValueError(f"These preferences leave room for only {capacity:.0%} of the portfolio "
-                         f"(each stock is capped at {w_max:.0%}). Exclude fewer sectors or raise caps.")
+        raise ValueError(f"The caps leave room for only {capacity:.0%} of the portfolio "
+                         f"({w_max:.0%} per stock, {cfg['optimization']['sector_max']:.0%} "
+                         "per sector).")
 
 
 def resolve_as_of(data: dict, as_of: str | pd.Timestamp | None) -> pd.Timestamp:
@@ -201,9 +174,7 @@ def whole_shares(target: pd.Series, prices: pd.Series, amount: float, w_max: flo
                  sectors: pd.Series, bounds: dict[str, tuple[float, float]]) -> pd.DataFrame:
     """Convert target weights to whole shares without breaking any cap.
 
-    Step 1: shares = ⌊wᵢ·amount / priceᵢ⌋. Step 2a: if rounding left a sector below its
-    minimum, buy shares in that sector first (within every cap). Step 2b: with the
-    leftover cash, repeatedly
+    Step 1: shares = ⌊wᵢ·amount / priceᵢ⌋. Step 2: with the leftover cash, repeatedly
     buy the one share that most reduces the distance to the target, Σ|valueᵢ − wᵢ·amount|,
     provided it is affordable, the stock stays ≤ w_max of the amount and its sector
     stays ≤ its maximum. A share is only bought if it brings that stock *closer* to its
@@ -220,7 +191,8 @@ def whole_shares(target: pd.Series, prices: pd.Series, amount: float, w_max: flo
     amount : investment amount.
     w_max : per-stock cap.
     sectors : ticker -> sector.
-    bounds : user sector bounds.
+    bounds : sector bounds {sector: (lower, upper)}; only the upper bounds are used
+        (the sector rule has no minimums).
 
     Returns
     -------
@@ -238,7 +210,6 @@ def whole_shares(target: pd.Series, prices: pd.Series, amount: float, w_max: flo
         return shares * px
 
     cash = amount - float(value().sum())
-    lo = {s: b[0] for s, b in bounds.items() if b[0] > 0}
     sec_of = sectors.reindex(tickers)
 
     def allowed(v: pd.Series) -> pd.Series:
@@ -251,22 +222,7 @@ def whole_shares(target: pd.Series, prices: pd.Series, amount: float, w_max: flo
                 ok[i] = False
         return ok
 
-    # Step 2a: rounding down can leave a sector below its minimum; refill those first,
-    # buying the share of the most under-filled stock in each short sector.
-    while lo:
-        v = value()
-        sector_val = v.groupby(sec_of).sum()
-        short = [s for s, m in lo.items() if sector_val.get(s, 0.0) < m * amount - 1e-9]
-        if not short:
-            break
-        ok = allowed(v) & sec_of.isin(short)
-        if not ok.any():
-            break                               # reported by the constraint check
-        pick = (target * amount - v)[ok].idxmax()
-        shares[pick] += 1
-        cash -= float(px[pick])
-
-    # Step 2b: spend what is left only where it moves a holding closer to its target.
+    # Step 2: spend what is left only where it moves a holding closer to its target.
     while True:
         v = value()
         gap = target * amount - v
@@ -298,7 +254,7 @@ def check_constraints(weights: pd.Series, sectors: pd.Series, w_max: float,
 
     Returns
     -------
-    dict: long_only, cap, sector_max, sector_min, excluded_zero, (budget).
+    dict: long_only, cap, sector_max, (budget).
 
     Theorem: none (feasible set of the main problem, plan 2.2).
     """
@@ -307,9 +263,6 @@ def check_constraints(weights: pd.Series, sectors: pd.Series, w_max: float,
         "long_only": bool((weights >= -tol).all()),
         "cap": bool((weights <= w_max + tol).all()),
         "sector_max": all(by_sector.get(s, 0.0) <= hi + tol for s, (_, hi) in bounds.items()),
-        "sector_min": all(by_sector.get(s, 0.0) >= lo - tol for s, (lo, _) in bounds.items()),
-        "excluded_zero": all(by_sector.get(s, 0.0) <= tol for s, (_, hi) in bounds.items()
-                             if hi == 0),
     }
     if full_investment:
         out["budget"] = bool(abs(weights.sum() - 1) <= tol)
@@ -338,7 +291,7 @@ def recommend(req: UserRequest, cfg: dict, data: dict | None = None,
 
     Parameters
     ----------
-    req : amount, risk tolerance and sector preferences.
+    req : amount and risk tolerance.
     cfg : config.
     data : processed data (loaded if None).
     as_of : recommendation date; None = latest month-end (config ``recommend.as_of``).
@@ -364,12 +317,12 @@ def recommend(req: UserRequest, cfg: dict, data: dict | None = None,
     bl, head = cfg["black_litterman"], cfg["black_litterman"]["headline"]
     gamma = cfg["risk_tolerance"][req.risk]
     w_max = cfg["backtest"]["w_max"]
-    bounds = sector_bounds(req)
+    bounds = sector_bounds(sectors, cfg)
 
     fc, ev = forecasts if forecasts is not None else forecasts_up_to(data, cfg, t)
     hist: History = history_at(data, t)
     inp = bl_inputs(hist, fc, ev, stocks, cfg, head["omega"], bl["tau"])
-    cons = Constraints(long_only=True, w_max=w_max, sectors=sectors, sector_bounds=bounds)
+    cons = strategy_constraints(hist, cfg)          # identical to the backtest's S6
     res = mean_variance(inp["mu_bl"], inp["Sigma"], gamma, cons, cfg["optimization"]["solver"])
     tol = cfg["optimization"]["weight_tol"]
     target = res.weights.where(res.weights.abs() >= tol, 0.0)
@@ -397,11 +350,12 @@ def recommend(req: UserRequest, cfg: dict, data: dict | None = None,
         "target_exp_excess_return_pa": st_t["exp_excess_return_pa"],
         "risk_free_pa": rf_annual,
         "max_abs_weight_gap": float((held_w - target).abs().max()),
+        "w_max": w_max,
     }
     sec = pd.DataFrame({"target": target.groupby(sectors).sum(),
                         "held": held_w.groupby(sectors).sum()})
-    for s, (lo, hi) in bounds.items():
-        sec.loc[s, "min"], sec.loc[s, "max"] = lo, hi
+    for s, (_, hi) in bounds.items():
+        sec.loc[s, "max"] = hi
     return Recommendation(
         as_of=t, request=req, gamma=gamma, holdings=hold, target=target,
         sector_weights=sec.sort_values("target", ascending=False), summary=summary,
@@ -414,15 +368,12 @@ def format_recommendation(rec: Recommendation) -> str:
     """Plain-text report of a recommendation for the command line."""
     s = rec.summary
     req = rec.request
-    prefs = []
-    if req.exclude:
-        prefs.append("exclude " + ", ".join(req.exclude))
-    prefs += [f"{k} ≤ {v:.0%}" for k, v in req.max_sector.items()]
-    prefs += [f"{k} ≥ {v:.0%}" for k, v in req.min_sector.items()]
+    caps = rec.sector_weights["max"].dropna() if "max" in rec.sector_weights else pd.Series()
+    rule = f"no sector above {caps.max():.0%}" if len(caps) else "no sector rule"
     lines = [
         f"Recommended portfolio as of {s['as_of']} (simulated; no trades are placed)",
         f"Amount ${req.amount:,.0f}  ·  risk tolerance {req.risk} (γ = {rec.gamma})  ·  "
-        f"preferences: {'; '.join(prefs) or 'none'}",
+        f"{rule}, at most {s['w_max']:.0%} per stock",
         "",
         f"{'Ticker':7s} {'Sector':24s} {'Price':>9s} {'Shares':>7s} {'Value':>11s} "
         f"{'Weight':>7s} {'Target':>7s}",
@@ -444,30 +395,16 @@ def format_recommendation(rec: Recommendation) -> str:
     return "\n".join(lines)
 
 
-def _parse_bounds(items: list[str]) -> dict[str, float]:
-    out = {}
-    for item in items:
-        name, _, val = item.rpartition("=")
-        if not name:
-            raise ValueError(f"Use the form 'Sector=0.2', got {item!r}")
-        out[name.strip()] = float(val)
-    return out
-
-
 def main() -> None:
     p = argparse.ArgumentParser(description="Recommend a simulated portfolio.")
     p.add_argument("--amount", type=float, required=True, help="investment amount in $")
     p.add_argument("--risk", required=True, choices=["low", "medium", "high"])
-    p.add_argument("--exclude", action="append", default=[], help="sector to exclude")
-    p.add_argument("--max-sector", action="append", default=[], help='e.g. "Energy=0.1"')
-    p.add_argument("--min-sector", action="append", default=[], help='e.g. "Health Care=0.15"')
     p.add_argument("--as-of", default=None, help="recommendation date (default: latest)")
     p.add_argument("--json", default=None, help="also save the result to this JSON file")
     p.add_argument("--config", default="config.yaml")
     a = p.parse_args()
     cfg = load_config(a.config)
-    req = UserRequest(a.amount, a.risk, a.exclude, _parse_bounds(a.max_sector),
-                      _parse_bounds(a.min_sector))
+    req = UserRequest(a.amount, a.risk)
     try:
         rec = recommend(req, cfg, as_of=a.as_of)
     except ValueError as e:

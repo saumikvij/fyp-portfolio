@@ -82,7 +82,7 @@ pytest tests/test_metrics.py tests/test_backtest.py   # metrics, T7 checks, engi
 python -m notebooks.phase2_backtest                    # S1–S4 results (about 5 seconds)
 ```
 
-- [src/backtest.py](src/backtest.py): monthly walk-forward engine. At each month-end t the strategy receives only data sliced to `.loc[:t]`, returns target weights, and the portfolio is held over the next month. Tracks drift, turnover and costs (`net(cost_bps)`), and daily returns for the daily tail-risk check. Strategies S1 (1/N), S2 (SPY), S3 (minimum variance) and S4 (Markowitz with historical μ, one per γ level).
+- [src/backtest.py](src/backtest.py): monthly walk-forward engine. At each month-end t the strategy receives only data sliced to `.loc[:t]`, returns target weights, and the portfolio is held over the next month. Tracks drift, turnover and costs (`net(cost_bps)`), and daily returns for the daily tail-risk check. Strategies S1 (1/N), S2 (SPY), S3 (minimum variance) and S4 (Markowitz with historical μ, one per γ level). Every optimized strategy (S3–S6) uses `strategy_constraints`: long-only, ≤ 10% per stock, no sector above 25% (A4).
 - [src/metrics.py](src/metrics.py): annualized return and volatility, Sharpe with the Lo (2002) confidence interval, maximum drawdown, historical VaR and CVaR, turnover, weight stability.
 - `condition_number` in [src/estimators.py](src/estimators.py): κ(Σ) for the empirical side of T5.
 
@@ -186,32 +186,37 @@ Outputs:
 ### Phase 5 — recommendation tool
 
 ```bash
-python -m src.recommend --amount 10000 --risk medium --exclude Energy --max-sector "Information Technology=0.2"
-python -m src.recommend --amount 10000 --risk low --min-sector "Health Care=0.15" --json out.json
+python -m src.recommend --amount 10000 --risk medium
+python -m src.recommend --amount 10000 --risk low --json out.json
 python -m src.recommend --amount 10000 --risk medium --as-of 2022-06-30     # what it would have said then
-python -m notebooks.phase5_examples      # the six worked examples in config.yaml
+python -m notebooks.phase5_walkthrough   # one complete example, every step: report/phase5_walkthrough.md
+python -m notebooks.phase5_examples      # the five worked examples in config.yaml
 pytest tests/test_recommend.py
 ```
 
 [src/recommend.py](src/recommend.py) turns a request into a whole-share portfolio:
-1. **Inputs:** amount (> 0), risk tolerance (low / medium / high → γ = 10 / 5 / 2), optional sector preferences: `--exclude` (hold 0%), `--max-sector "Sector=0.2"`, `--min-sector "Sector=0.15"`.
-2. **Checks first:** malformed or impossible requests are rejected with the reason (unknown sector, bounds outside [0, 1], minimums above 100%, or too few allowed stocks for 100% under the 10% per-stock cap).
+1. **Inputs:** amount (> 0) and risk tolerance (low / medium / high → γ = 10 / 5 / 2). Nothing else: the sector rule is chosen by us, not the user (advisor feedback A4).
+2. **Constraints:** exactly those of the backtested strategies (`src.backtest.strategy_constraints`): long-only, ≤ 10% per stock, **no sector above 25%** (`optimization.sector_max` in `config.yaml`). The same rule applies to every optimized strategy in Phases 2–4 (S3–S6).
 3. **Model:** the Phase 4 headline: elastic-net forecasts (re-run with the Phase 3 walk-forward up to the recommendation date), Black–Litterman with Ω-A and τ = 0.05, the trailing 252-day Σ.
-4. **Target weights:** the same constrained mean-variance problem as the backtest, with the user's sector bounds added (long-only, ≤ 10% per stock).
-5. **Whole shares** at the close of the recommendation date: round down; then refill any sector pushed below its minimum; then spend cash only where it moves a holding closer to its target, never breaking a cap.
+4. **Target weights:** the constrained mean-variance problem; these equal the backtest's S6 weights at that date (tested).
+5. **Whole shares** at the close of the recommendation date: round down, then spend cash only where it moves a holding closer to its target, never breaking a cap.
 6. **Output:** holdings (shares, value, weight vs target), cash, expected volatility, model expected excess return, and every constraint checked on both the target weights and the whole-share holdings.
+
+[report/phase5_walkthrough.md](report/phase5_walkthrough.md) documents one complete example ($10,000, medium risk) from input to whole shares: γ, the forecasts, Π, Ω and μ_BL, which limits bind, the KKT check, the holdings and every constraint check.
 
 | Test | Result checked |
 |---|---|
-| `test_worked_example_satisfies_every_constraint` | $10,000, medium, no Energy, IT ≤ 20%: every constraint holds for target weights and for whole shares |
+| `test_worked_example_satisfies_every_constraint` | $10,000, medium: every constraint (stock cap, 25% sector rule, budget) holds for target weights and for whole shares |
+| `test_tool_target_equals_backtest_weights` | at three dates the tool's target weights equal the backtested S6 weights (difference < 1e-9), with the same constraints |
+| `test_sector_rule_binds_in_the_backtest` | without the rule, high-risk Markowitz puts > 25% in one sector in most months; with it, never |
+| `test_sector_rule_comes_from_config`, `test_infeasible_sector_rule_is_rejected` | every sector gets (0, 25%); a rule leaving room for < 100% is rejected |
 | `test_higher_risk_tolerance_gives_higher_volatility` | low < medium < high ex-ante volatility |
 | `test_amount_scales_shares_not_target_weights` | the amount changes the shares, not the target; larger amounts track the target more closely |
-| `test_minimum_sector_preference_is_met` | a sector minimum holds before and after rounding to whole shares |
-| `test_invalid_or_infeasible_requests_are_rejected` | 7 kinds of bad request give a clear error |
+| `test_invalid_requests_are_rejected` | non-positive amounts and unknown risk levels give a clear error |
 | `test_recommendation_is_reproducible`, `test_forecasts_match_phase3` | identical output on re-runs; the tool's forecasts equal the Phase 3 forecasts |
 | `test_past_recommendation_uses_no_later_data` | a recommendation as of 2022-06-30 is unchanged when all later data is scrambled |
 
-Outputs: `report/tables/phase5_examples.csv` (one row per scenario, with every constraint check), `phase5_example_holdings.csv`, `phase5_example_sectors.csv`, and `report/figures/recommend_sectors.png`.
+Outputs: `report/phase5_walkthrough.md` with `report/tables/phase5_walkthrough_*.csv`; `report/tables/phase5_examples.csv` (one row per scenario, with every constraint check), `phase5_example_holdings.csv`, `phase5_example_sectors.csv`, and `report/figures/recommend_sectors.png`.
 
 ## Final design (D6): two return models + ML risk model
 

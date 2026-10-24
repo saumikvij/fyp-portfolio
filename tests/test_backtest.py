@@ -131,7 +131,8 @@ def test_backtest_results_unchanged_by_future_data(cut):
     """Scramble every table after month-end t: all results dated <= t are unchanged."""
     data = make_data()
     stocks = ["A", "B", "C"]
-    cfg = {**CFG, "backtest": {**CFG["backtest"], "cov_window_days": 60, "w_max": 0.6}}
+    cfg = {**CFG, "backtest": {**CFG["backtest"], "cov_window_days": 60, "w_max": 0.6},
+           "optimization": {**CFG["optimization"], "sector_max": 0.6}}   # toy: 2 sectors
     dates = data["returns_monthly"].index[3:12]
     t = data["returns_monthly"].index[cut]
     moved = {k: (perturb_after(v, t) if k != "sectors" else v) for k, v in data.items()}

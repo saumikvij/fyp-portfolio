@@ -190,6 +190,27 @@ def mean_variance_closed_form(mu: pd.Series, Sigma: pd.DataFrame, gamma: float) 
 # --------------------------------------------------------------------------- constrained QP
 
 
+def rule_sector_bounds(sectors: pd.Series, sector_max: float | None) -> dict[str, tuple[float, float]]:
+    """The project's sector rule as optimizer bounds: every sector in (0, sector_max).
+
+    Parameters
+    ----------
+    sectors : ticker -> sector name (the universe).
+    sector_max : largest total weight of any one sector (config
+        ``optimization.sector_max``, 0.25 under A4); None = no sector rule.
+
+    Returns
+    -------
+    {sector: (0.0, sector_max)} for every sector in ``sectors``, or {} if None.
+
+    Theorem: none (adds linear inequalities S w ≤ u to the feasible set; T1 and T4
+    still apply since the set stays convex and, here, non-empty).
+    """
+    if sector_max is None:
+        return {}
+    return {s: (0.0, float(sector_max)) for s in sorted(pd.unique(sectors.dropna()))}
+
+
 @dataclass
 class Constraints:
     """Constraints of the main problem besides the budget 1ᵀw = 1.
