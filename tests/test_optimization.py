@@ -1,4 +1,4 @@
-"""Phase 1 theorem-checking tests (plan Section 7): T1, T2, Cor. 2.1, T3, T4.
+"""Phase 1 theorem-checking tests (plan Section 7): T1, T2, Cor. 2.1, T3, T4, T5.
 
 Each test checks a result from the report numerically on random well-conditioned
 problems (a small factor model), and the solver's constrained solution where relevant.
@@ -274,3 +274,77 @@ def test_T4_kkt_on_real_data(level):
     res = mean_variance(mu, Sigma, gamma, cons)
     for name, value in kkt_residuals(res, mu, Sigma, gamma, cons).items():
         assert value < TOL, (name, value)
+
+
+# --------------------------------------------------------------------------- T5
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("gamma", [2.0, 5.0, 10.0])
+@pytest.mark.parametrize("case", list(CONSTRAINT_CASES))
+def test_T5_weights_are_lipschitz_in_mu_under_any_constraints(seed, gamma, case):
+    """T5(a): ‖w*(μ+Δμ) − w*(μ)‖ ≤ ‖Δμ‖ / (γ λ_min(Σ)) for a closed convex feasible set,
+    including perturbations large enough to change the active constraints."""
+    mu, Sigma, sectors = make_problem(seed)
+    cons = constraints_for(case, sectors)
+    lam_min = np.linalg.eigvalsh(Sigma.values).min()
+    w0 = mean_variance(mu, Sigma, gamma, cons).weights
+    cap = cons.w_max if cons.w_max is not None else np.inf
+
+    def active(w):                     # which stocks sit at zero or at the cap
+        return np.concatenate([w.values <= WTOL, w.values >= cap - WTOL])
+
+    rng = np.random.default_rng(seed + 100)
+    active_changed = False
+    for scale in (1e-4, 1e-3, 1e-2, 5e-2, 0.2):
+        dmu = pd.Series(rng.normal(0, scale, len(mu)), index=mu.index)
+        w1 = mean_variance(mu + dmu, Sigma, gamma, cons).weights
+        bound = np.linalg.norm(dmu) / (gamma * lam_min)
+        assert np.linalg.norm(w1 - w0) <= bound + 1e-7
+        active_changed |= bool((active(w0) != active(w1)).any())
+    assert active_changed, "no perturbation changed the active set: test is too weak"
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_T5_unconstrained_relative_error_bounded_by_condition_number(seed):
+    """T5(b): with no constraints w* = Σ⁻¹μ/γ and ‖Δw‖/‖w‖ ≤ κ(Σ)‖Δμ‖/‖μ‖; the bound is
+    attained when μ lies on the top eigenvector of Σ and Δμ on the bottom one."""
+    mu, Sigma, _ = make_problem(seed)
+    S, gamma = Sigma.values, 5.0
+    kappa = np.linalg.cond(S)
+    rng = np.random.default_rng(seed)
+    solve = lambda m: np.linalg.solve(S, m) / gamma                       # noqa: E731
+    for _ in range(50):
+        dmu = rng.normal(0, 1e-3, len(mu))
+        w, dw = solve(mu.values), solve(dmu)
+        assert np.linalg.norm(dw) / np.linalg.norm(w) <= \
+            kappa * np.linalg.norm(dmu) / np.linalg.norm(mu.values) * (1 + 1e-10)
+    lam, V = np.linalg.eigh(S)
+    m, dm = V[:, -1], 1e-3 * V[:, 0]
+    ratio = (np.linalg.norm(solve(dm)) / np.linalg.norm(solve(m))) / (np.linalg.norm(dm) / np.linalg.norm(m))
+    assert ratio == pytest.approx(kappa, rel=1e-8)
+
+
+@pytest.mark.data
+@pytest.mark.skipif(not HAVE_DATA, reason="run `python -m src.data` first")
+def test_T5_bound_on_real_data_with_project_constraints():
+    """T5(a) with the real trailing Σ and the project's constraints (10% cap, 25% sector
+    rule): the weight change never exceeds ‖Δμ‖/(γ λ_min)."""
+    from src.optimization import rule_sector_bounds
+    d = load_processed(CFG)
+    stocks = list(CFG["universe"])
+    t = pd.Timestamp(CFG["frontier_plot"]["as_of"])
+    Sigma = sample_covariance(d["returns_daily"][stocks], t, CFG["backtest"]["cov_window_days"],
+                              CFG["data"]["trading_days_per_year"] / 12)
+    mu = historical_mean(d["returns_monthly"][stocks], t)
+    sectors = d["sectors"]["sector"]
+    cons = Constraints(long_only=True, w_max=CFG["backtest"]["w_max"], sectors=sectors,
+                       sector_bounds=rule_sector_bounds(sectors, CFG["optimization"]["sector_max"]))
+    lam_min = np.linalg.eigvalsh(Sigma.values).min()
+    rng = np.random.default_rng(0)
+    for gamma in CFG["risk_tolerance"].values():
+        w0 = mean_variance(mu, Sigma, gamma, cons).weights
+        for _ in range(10):
+            dmu = pd.Series(rng.normal(0, 0.002, len(mu)), index=mu.index)
+            w1 = mean_variance(mu + dmu, Sigma, gamma, cons).weights
+            assert np.linalg.norm(w1 - w0) <= np.linalg.norm(dmu) / (gamma * lam_min) + 1e-7

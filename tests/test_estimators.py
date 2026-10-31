@@ -78,10 +78,11 @@ HAVE_DATA = (Path(CFG["data"]["processed_dir"]) / "prices.parquet").exists()
 @pytest.mark.data
 @pytest.mark.skipif(not HAVE_DATA, reason="run `python -m src.data` first")
 def test_real_covariance_is_positive_definite():
-    """Σ ≻ 0 is the standing assumption of T1–T5; check it on the real data."""
+    """Σ ≻ 0 is the standing assumption of T1–T6; check it at every rebalance date."""
     d = load_processed(CFG)
     stocks = list(CFG["universe"])
     rets = d["returns_daily"][stocks]
-    for t in d["returns_monthly"].index[12::12]:
+    from src.backtest import rebalance_dates
+    for t in rebalance_dates(d["returns_monthly"].index, CFG["backtest"]["oos_start"]):
         S = sample_covariance(rets, t, CFG["backtest"]["cov_window_days"], DAYS_PER_MONTH)
         assert np.linalg.eigvalsh(S.values).min() > 0, t
