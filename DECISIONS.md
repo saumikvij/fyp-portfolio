@@ -453,3 +453,29 @@ A4 said the rule "rarely binds", from one date (IT at 23.3%). Over the whole bac
 5. **Whole shares.** The tool's *target* weights equal the backtested S6 weights; the whole-share holdings do not (largest per-stock gap 1.47 percentage points; 36 of 49 target stocks bought; $526 cash for $10,000). The report must say "target weights".
 6. **Scaling.** Everything is monthly: μ, Π, Q are monthly excess returns; Σ = daily sample covariance × 21; Ω is a monthly variance; τ and δ are dimensionless. Annualization (×12 for means, ×√12 for volatility and Sharpe) is used only for reporting.
 7. **Sector constraint.** S is the 11 × 51 matrix with S_{k,i} = 1 if stock i is in sector k; each stock is in exactly one sector, so (Sᵀρ)ᵢ = ρ_{k(i)}. Only upper bounds (0.25); lower bounds are not imposed (they would duplicate w ≥ 0).
+
+## R2 Survivorship and universe-selection check (designed 31 Oct 2026, before any result)
+
+The plan lists survivorship bias as a known limitation to test if time allows (Section 3): the 51 stocks are large companies *today*, so they are, in part, the winners of 2010–2026.
+
+### R2.1 What can and cannot be tested
+- A full correction needs historical index memberships including delisted firms (e.g. CRSP), which Yahoo Finance does not provide. That stays a stated limitation.
+- What can be tested with our data: (a) how much the hand-picked 51 flatter the *level* of returns; (b) whether the *conclusions* (Black–Litterman cuts turnover; no reliable Sharpe difference) depend on which stocks were picked.
+
+### R2.2 Design
+- **Pool:** the 417 S&P 500 members with complete prices since January 2010 and a share count (from the 1,047-stock dataset built by `src/wide_universe.py`; candidate list = S&P 1500 members from Wikipedia, saved in `resources/sp1500_candidates.csv`). The pool is itself made of today's members, so it carries survivorship bias too; R2 measures sensitivity to the *choice* of stocks, not the full bias.
+- **Universes, each with the original sector counts** (IT 6; Consumer Discretionary, Consumer Staples, Health Care, Financials, Industrials 5 each; the other five sectors 4 each = 51):
+  1. the original 51 (rerun through this pipeline as a check that it reproduces the main results);
+  2. **"2015 liquidity":** in each sector, the stocks with the highest average daily dollar volume (close × volume) in calendar 2015, i.e. chosen with information available at the start of the backtest;
+  3. **20 random universes** (seeds 0–19), drawn uniformly within each sector.
+- **Pipeline (unchanged from the main project):** the 13 base features, elastic net with the Phase 3 walk-forward and settings, retrained on each universe; strategies S1 (1/N), S5 (elastic net, γ = 5), S6 (Black–Litterman, elastic net, Ω-A, γ = 5, τ = 0.05) and BL prior only; 10% stock cap, 25% sector rule, 10 bps, Dec 2015 – Jul 2026.
+- **Level comparison:** 1/N on the original 51 vs 1/N on all 417 pool stocks vs SPY (an index fund, so free of selection after the fact).
+- **Reported:** per universe, annual return and Sharpe of each strategy, turnover of S5 and S6, and the differences S6 − S5 and S6 − prior; across the 20 random universes: median, range, and how often S6 trades less than S5 and beats the prior.
+- **Reading rule:** the conclusions are robust if Black–Litterman cuts turnover in (almost) every universe and the S6 − prior Sharpe difference is centred near zero; a large gap between the original 51 and the random/2015 universes would signal that the stock choice drives the results.
+
+### R2.3 Results (`report/tables/r2_universes.csv`, `r2_summary.csv`, `r2_levels.csv`)
+- **Check:** the original 51 rerun through this pipeline reproduces the main results exactly (S6 Sharpe 0.872, prior 0.964, turnover 72% → 30%).
+- **Black–Litterman cuts turnover in every universe:** 20 of 20 random universes (median S5 65% → S6 25% a month; range of the cut 10–76 points) and the 2015-liquidity universe (50% → 26%).
+- **The views do not beat the prior:** S6 − prior Sharpe has median −0.06 (range −0.16 to +0.05); S6 beats the prior in 5 of 20 random universes; 2015-liquidity −0.02. S6 beats raw-forecast S5 in 14 of 20 (median +0.11).
+- **Levels:** 1/N earns 15.8% a year on the original 51, the same as the median random universe (15.8%; 10 of 20 random universes earn more), 16.5% on all 417 pool stocks, and 15.0% for SPY. So the hand-picked 51 do not flatter returns relative to other current S&P 500 members; the ~1-point gap of all these equal-weight portfolios over SPY is consistent with survivorship (and with equal weighting tilting toward smaller stocks), and cannot be separated without delisted firms.
+- **Reading:** both main conclusions are robust to the choice of stocks; full survivorship bias stays a stated limitation.

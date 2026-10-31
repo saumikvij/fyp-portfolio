@@ -239,6 +239,15 @@ Outputs in `report/tables/`: `final_risk_accuracy.csv` and `final_risk_dm.csv` (
 | `test_bl_uses_ml_sigma_only_when_given` | without `vol_forecasts` Black–Litterman is unchanged; with it, Σ = D·R·D |
 | `test_har_recovers_a_linear_relation`, `test_diebold_mariano` | the HAR baseline and the Diebold–Mariano test behave as defined |
 
+## Survivorship and universe check (R2)
+
+```bash
+python -m src.wide_universe                # build data/wide (S&P 1500 members with full history; ~1,050 stocks)
+python -m notebooks.universe_robustness    # rerun the pipeline on 22 universes of 51 stocks
+```
+
+[src/wide_universe.py](src/wide_universe.py) builds the wider dataset from `resources/sp1500_candidates.csv` with the Phase 0 cleaning rules. [notebooks/universe_robustness.py](notebooks/universe_robustness.py) retrains the elastic net and reruns S1, S5, S6 and BL prior on the original 51, a "2015 liquidity" universe (highest 2015 dollar volume per sector) and 20 random universes with the same sector counts, and compares equal-weight returns of the 51, the 417-stock pool and SPY. Outputs: `report/tables/r2_universes.csv`, `r2_summary.csv`, `r2_levels.csv`. See DECISIONS R2.
+
 ## Tests
 
 ```bash
